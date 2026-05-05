@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Mosaico Online | Envio</title>
+  <style>
+    :root {
+      --bg: #ecebe6;
+      --bg-soft: #f5f4ef;
+      --text: #101010;
+      --muted: #4f4f4a;
+      --line: rgba(16,16,16,.14);
+      --primary: #0d84d9;
+      --primary-hover: #086db4;
+      --radius: 18px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --text-xs: 0.84rem;
+      --text-sm: 0.95rem;
+      --text-md: clamp(1rem, 0.95rem + 0.3vw, 1.1rem);
+      --text-lg: clamp(2.1rem, 1.7rem + 3.4vw, 4.6rem);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+
+    body {
+      min-height: 100dvh;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: linear-gradient(160deg, #ecebe6 0%, #f5f4ef 55%, #e7e5dd 100%);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: max(20px, env(safe-area-inset-top)) var(--space-4) max(24px, env(safe-area-inset-bottom));
+      display: grid;
+      gap: var(--space-6);
+    }
+
+    .intro {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .eyebrow {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #30302c;
+    }
+
+    .title {
+      margin: 0;
+      font-size: var(--text-lg);
+      line-height: 0.92;
+      letter-spacing: -0.05em;
+      max-width: 9ch;
+      font-weight: 650;
+    }
+
+    .poem {
+      margin: 0;
+      max-width: 34rem;
+      font-size: var(--text-md);
+      line-height: 1.25;
+      color: #1d1d1a;
+    }
+
+    .card {
+      background: rgba(255,255,255,.72);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: var(--space-5);
+      display: grid;
+      gap: var(--space-4);
+      max-width: 520px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .button-upload {
+      min-height: 48px;
+      border-radius: 999px;
+      padding: 0 var(--space-5);
+      font-size: var(--text-sm);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .button-upload {
+      border: 0;
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .button-upload:hover { background: var(--primary-hover); }
+
+    .button-upload:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    .upload-status,
+    .helper {
+      font-size: var(--text-xs);
+      color: var(--muted);
+      min-height: 1.1rem;
+      margin: 0;
+    }
+
+    .helper {
+      color: #3c3c38;
+    }
+
+    .preview {
+      max-width: 520px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--bg-soft);
+    }
+
+    .preview img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .preview-note {
+      margin: 0;
+      padding: 10px 12px;
+      font-size: var(--text-xs);
+      color: var(--muted);
+      background: rgba(255,255,255,.72);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+
+    @media (min-width: 900px) {
+      .page {
+        grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+        align-items: start;
+        gap: 36px;
+        padding: 44px 34px;
+      }
+
+      .intro,
+      .card {
+        grid-column: 1;
+      }
+
+      .preview {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+      }
+
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro" aria-labelledby="titulo-mosaico">
+      <div class="eyebrow">Compartilhe e faça parte</div>
+      <h1 class="title" id="titulo-mosaico">MEMÓRIA EM MOSAICO</h1>
+      <p class="poem">
+        Memória em mosaico transforma uma única fotografia em um painel feito de muitas outras imagens. De longe, você enxerga a cena inteira; de perto, descobre lembranças que emprestam cor à sua história.
+      </p>
+    </section>
+
+    <section class="card" aria-label="Envio de imagem">
+      <div class="button-row">
+        <button class="button-upload" id="uploadTrigger" type="button">ENVIE UMA FOTO</button>
+        <input class="sr-only" id="imageInput" type="file" accept=".jpg,.jpeg,.heic,.heif,image/jpeg,image/heic,image/heif" />
+      </div>
+      <p class="upload-status" id="uploadStatus" aria-live="polite"></p>
+      <p class="helper">Aceitamos JPG, JPEG, HEIC e HEIF. Após o envio, você será redirecionado automaticamente para a tela de processamento.</p>
+    </section>
+
+    <aside class="preview" aria-label="Prévia ilustrativa do conceito">
+      <img
+        src="./hero_mosaico_mobile.svg"
+        alt="Composição visual leve representando o conceito do mosaico"
+        width="860"
+        height="600"
+        loading="lazy"
+        decoding="async"
+      />
+      <p class="preview-note">A exploração com zoom profundo fica disponível na página de resultado.</p>
+    </aside>
+  </main>
+
+  <script src="./home.js" defer></script>
+</body>
+</html>

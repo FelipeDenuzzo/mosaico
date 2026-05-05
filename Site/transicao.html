@@ -1,0 +1,185 @@
+<!-- transicao.html -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Processando mosaico</title>
+  <style>
+    :root {
+      --bg: #ecebe6;
+      --text: #101010;
+      --muted: #4f4f4a;
+      --primary: #0d84d9;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      max-width: 420px;
+      width: 100%;
+      background: #f7f6f2;
+      border-radius: 24px;
+      padding: 24px 24px 22px;
+      box-shadow: 0 14px 35px rgba(0,0,0,.08);
+      text-align: center;
+    }
+    /* frame para as fotos da casa */
+    .photo-frame {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 18px;
+      background: #e2e0d9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .photo-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      border: 3px solid rgba(13,132,217,.18);
+      border-top-color: var(--primary);
+      animation: spin 800ms linear infinite;
+      margin: 0 auto 18px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 1.6rem;
+      letter-spacing: -0.04em;
+    }
+    p {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: .95rem;
+      line-height: 1.5;
+    }
+    .hint {
+      font-size: .78rem;
+      color: var(--muted);
+      opacity: .8;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <!-- novo espaço para foto da casa -->
+    <div class="photo-frame">
+      <img id="casaFoto" src="" alt="Detalhe da Casa da Memória Italiana">
+    </div>
+
+    <div class="spinner"></div>
+    <h1 id="statusTitle">Montando o seu mosaico</h1>
+    <p id="statusMsg">
+      Estamos recebendo a sua foto e preparando a composição. Assim que o mosaico estiver pronto, ele aparecerá na tela principal.
+    </p>
+    <p class="hint" id="hintMsg">
+      Aguarde, você será redirecionado automaticamente quando o mosaico estiver pronto.
+    </p>
+  </main>
+
+  <script>
+    function getJobId() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('job_id');
+    }
+
+    const statusTitle = document.getElementById('statusTitle');
+    const statusMsg = document.getElementById('statusMsg');
+    const hintMsg = document.getElementById('hintMsg');
+    const casaFoto = document.getElementById('casaFoto');
+
+    // fotos da casa: 1.jpg a 7.jpg
+    const fotosCasa = [1, 2, 3, 4, 5, 6, 7];
+
+    function escolherFotoCasa() {
+      const idx = Math.floor(Math.random() * fotosCasa.length);
+      const num = fotosCasa[idx];
+      // caminho relativo à pasta do site (index/transicao/resultado)
+      casaFoto.src = `./fotosdacasa/${num}.jpg`;
+    }
+
+    // TODAS as frases originais
+    const frases = [
+      "Estamos compondo um painel de memórias: a sua imagem encontra outras histórias que moram no Museu da Casa da Memória Italiana.",
+      "Cada ponto de cor desta tela é uma fotografia inteira: enquanto o mosaico nasce, você também entra na história da casa.",
+      "O Mosaico está costurando fragmentos - fotos de muitas vidas - para que a sua se torne parte deste tecido de memórias italianas.",
+      "De longe, será um retrato; de perto, um conjunto de lembranças. Agora, estamos criando os pequenos pontos que sustentam essa imagem.",
+      "Enquanto o mosaico se prepara, a sua foto se espalha em delicados pedaços de cor, fazendo companhia às memórias guardadas no museu.",
+      "Aqui, cada detalhe é um convite: o mosaico organiza pequenas imagens para que a sua se reconheça dentro de uma história maior.",
+      "A Casa da Memória Italiana é feita de muitas famílias. Neste instante, o mosaico está abrindo espaço para a sua.",
+      "Estamos desenhando, ponto a ponto, uma memória em mosaico: você não é só visitante, é parte da imagem que está surgindo.",
+      "As fotos do acervo emprestam suas cores à sua fotografia. Enquanto o mosaico nasce, passado e presente dividem o mesmo quadro.",
+      "Em poucos instantes, você verá uma imagem única: feita da sua lembrança, sustentada pelas memórias de tantas outras pessoas."
+    ];
+
+    function fraseAleatoria() {
+      const i = Math.floor(Math.random() * frases.length);
+      return frases[i];
+    }
+
+    const jobId = getJobId();
+
+    if (!jobId) {
+      statusTitle.textContent = 'Erro';
+      statusMsg.textContent = 'Job ID não encontrado na URL.';
+      hintMsg.textContent = '';
+    } else {
+      // escolhe UMA frase e UMA foto para este mosaico
+      statusMsg.textContent = fraseAleatoria();
+      escolherFotoCasa();
+
+      async function checkStatus() {
+        try {
+          const resp = await fetch(`http://127.0.0.1:5000/status/${encodeURIComponent(jobId)}`);
+          const data = await resp.json();
+
+          if (data.ok && data.status === 'pronto' && data.output_url) {
+            statusTitle.textContent = 'Mosaico pronto!';
+            statusMsg.textContent = 'Seu mosaico foi gerado com sucesso.';
+            hintMsg.textContent = 'Redirecionando para o resultado...';
+
+            setTimeout(() => {
+              window.location.href = `sucesso.html?job_id=${encodeURIComponent(jobId)}`;
+            }, 1200);
+          } else if (data.ok === false || data.erro) {
+            statusTitle.textContent = 'Erro ao gerar mosaico';
+            statusMsg.textContent = data.erro || 'Ocorreu um erro no processamento.';
+            hintMsg.textContent = '';
+          } else {
+            // não muda frase nem foto; apenas continua acompanhando o job
+            setTimeout(checkStatus, 2000);
+          }
+        } catch (e) {
+          statusTitle.textContent = 'Erro de conexão';
+          statusMsg.textContent = 'Não foi possível consultar o status do job.';
+          hintMsg.textContent = '';
+        }
+      }
+
+      checkStatus();
+    }
+  </script>
+</body>
+</html>

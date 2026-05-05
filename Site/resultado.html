@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Seu Mosaico está pronto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <style>
+    :root {
+      --bg: #050507;
+      --surface: #101018;
+      --text: #f5f5f5;
+      --muted: #9e9ea7;
+      --line: rgba(255,255,255,.08);
+      --primary: #ffd27a;
+      --primary-hover: #ffbc64;
+      --shadow: 0 18px 55px rgba(0,0,0,.75);
+      --radius-md: 22px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --text-xs: 0.8rem;
+      --text-sm: 0.9rem;
+      --text-base: 1rem;
+      --text-lg: 1.35rem;
+      --text-xl: 2rem;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100dvh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .page {
+      min-height: 100dvh;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-8);
+      padding: max(16px, env(safe-area-inset-top)) var(--space-5) max(24px, env(safe-area-inset-bottom));
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: var(--space-4);
+    }
+    .brand {
+      font-size: 14px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #f5f5f5;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: #9e9ea7;
+    }
+    .visual {
+      order: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .viewer-shell {
+      width: 100%;
+      background: transparent;
+    }
+    .viewer-frame {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 5.6;
+      background: radial-gradient(circle at top, #313348 0, #050507 55%);
+      overflow: hidden;
+      border-radius: 24px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      box-shadow: var(--shadow);
+      border: 1px solid #707070;
+    }
+    .viewer-stage {
+      position: absolute;
+      inset: 0;
+      cursor: grab;
+    }
+    .viewer-stage.dragging { cursor: grabbing; }
+    #mosaicImage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform-origin: center center;
+      max-width: none;
+      max-height: none;
+      will-change: transform;
+      pointer-events: none;
+      display: none;
+    }
+    .viewer-hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: var(--text-xs);
+      line-height: 1.4;
+    }
+    .viewer-controls {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .zoom-btn {
+      min-width: 44px;
+      height: 44px;
+      border: 1px solid rgba(255,255,255,.24);
+      background: rgba(5,5,10,.78);
+      color: var(--text);
+      border-radius: 999px;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: transform .15s ease, background .15s ease;
+      color: #f5f5f5;
+    }
+    .zoom-btn:hover {
+      background: rgba(18,18,30,.95);
+      transform: translateY(-1px);
+    }
+    .zoom-btn:active {
+      transform: scale(.97);
+    }
+    .copy {
+      order: 2;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--space-4);
+    }
+    .title {
+      font-size: var(--text-xl);
+      font-weight: 500;
+    }
+    .hint {
+      font-size: var(--text-sm);
+      color: var(--muted);
+      max-width: 360px;
+      line-height: 1.5;
+    }
+    .status {
+      font-size: 13px;
+      color: #c2c2d2;
+      min-height: 18px;
+    }
+    .status.error {
+      color: #ff8080;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      align-items: center;
+    }
+    .primary-button {
+      min-height: 44px;
+      border: 0;
+      background: linear-gradient(135deg, #ffd27a, #ff9a62);
+      color: #1e1e26;
+      border-radius: 999px;
+      padding: 0 var(--space-6);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .primary-button[disabled] {
+      opacity: 0.4;
+      cursor: default;
+    }
+    .ghost-button {
+      appearance: none;
+      border: 1px solid #3b3b4d;
+      border-radius: 999px;
+      padding: 10px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: transparent;
+      color: #d8d8e4;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .ghost-button.disabled {
+      opacity: 0.5;
+      cursor: default;
+      pointer-events: none;
+    }
+    .secondary {
+      font-size: 12px;
+      color: #8d8da0;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
+    }
+    @media (min-width: 980px) {
+      .page {
+        grid-template-columns: minmax(380px, 0.9fr) minmax(0, 1.1fr);
+        align-items: center;
+        gap: clamp(24px, 4vw, 80px);
+      }
+      .visual {
+        order: 2;
+        justify-content: flex-end;
+      }
+      .copy {
+        order: 1;
+      }
+      .viewer-frame {
+        aspect-ratio: 4 / 5.9;
+        max-width: 540px;
+        margin-left: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <div class="brand">Mosaico Online</div>
+        <div class="subtitle">Memórias em mosaico</div>
+      </div>
+    </header>
+
+    <section class="visual" aria-labelledby="titulo-mosaico">
+      <div class="viewer-shell">
+        <div class="viewer-frame" id="viewerFrame">
+          <div class="viewer-stage" id="viewerStage">
+            <img
+              id="mosaicImage"
+              class="mosaic-image"
+              src=""
+              alt="Mosaico final"
+            />
+          </div>
+        </div>
+        <div class="viewer-controls" aria-label="Controles de zoom">
+          <button class="zoom-btn" id="zoomOut" type="button" aria-label="Reduzir zoom">-</button>
+          <button class="zoom-btn" id="zoomIn" type="button" aria-label="Ampliar zoom">+</button>
+        </div>
+        <p class="viewer-hint">Use as lupas ou o gesto de pinça para explorar de perto cada tile do seu mosaico.</p>
+      </div>
+    </section>
+
+    <section class="copy">
+      <div>
+        <h1 class="title" id="titulo-mosaico">Seu mosaico está pronto</h1>
+        <p class="hint">
+          Veja sua imagem reconstruída pelo acervo de fotos.
+        </p>
+      </div>
+      <div class="status" id="statusText"></div>
+      <div class="actions">
+        <a class="ghost-button" href="index.html">
+          Voltar para o começo
+        </a>
+        <a class="ghost-button" href="index.html">
+          Subir outra foto
+        </a>
+        <span class="secondary">
+          Arquivo JPEG, largura 4380 px.
+        </span>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function getJobIdFromQuery() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get("job_id");
+    }
+
+    async function loadResult() {
+      const jobId = getJobIdFromQuery();
+      const statusText = document.getElementById("statusText");
+      const img = document.getElementById("mosaicImage");
+      const titulo = document.getElementById("titulo-mosaico");
+
+      if (!jobId) {
+        statusText.textContent = "Nenhum job foi informado na URL.";
+        statusText.classList.add("error");
+        return;
+      }
+
+      statusText.textContent = "Carregando seu mosaico...";
+      try {
+        const resp = await fetch(`/status/${encodeURIComponent(jobId)}`);
+        if (!resp.ok) {
+          throw new Error("Falha ao consultar o status do mosaico.");
+        }
+        const data = await resp.json();
+
+        if (data.status === "pronto" && data.output_url) {
+          const url = data.output_url;
+
+          img.src = url;
+          img.onload = () => {
+            img.style.display = "block";
+            initViewer();
+          };
+
+          if (titulo) {
+            titulo.textContent = "Seu mosaico está pronto";
+          }
+
+          statusText.textContent = "";
+        } else if (data.status === "erro") {
+          statusText.textContent =
+            data.erro || "Ocorreu um erro ao gerar o mosaico.";
+          statusText.classList.add("error");
+        } else {
+          statusText.textContent =
+            "Seu mosaico ainda não está pronto. Volte para a tela anterior ou tente novamente em alguns instantes.";
+        }
+      } catch (err) {
+        console.error(err);
+        statusText.textContent =
+          "Não foi possível carregar seu mosaico. Verifique a conexão e tente novamente.";
+        statusText.classList.add("error");
+      }
+    }
+
+    function initViewer() {
+      const frame = document.getElementById('viewerFrame');
+      const stage = document.getElementById('viewerStage');
+      const image = document.getElementById('mosaicImage');
+      const zoomInButton = document.getElementById('zoomIn');
+      const zoomOutButton = document.getElementById('zoomOut');
+
+      let frameRect = null;
+      let imgNaturalWidth = image.naturalWidth;
+      let imgNaturalHeight = image.naturalHeight;
+      let baseScale = 1;
+      let scale = 1;
+      let minScale = 1;
+      let maxScale = 11;
+      let translateX = 0;
+      let translateY = 0;
+
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let startTranslateX = 0;
+      let startTranslateY = 0;
+
+      function clamp(value, min, max) {
+        return Math.min(max, Math.max(min, value));
+      }
+
+      function updateRects() {
+        frameRect = frame.getBoundingClientRect();
+      }
+
+      function containScale() {
+        const scaleX = frameRect.width / imgNaturalWidth;
+        const scaleY = frameRect.height / imgNaturalHeight;
+        return Math.min(scaleX, scaleY);
+      }
+
+      function applyBounds() {
+        const renderedWidth = imgNaturalWidth * baseScale * scale;
+        const renderedHeight = imgNaturalHeight * baseScale * scale;
+        const limitX = Math.max(0, (renderedWidth - frameRect.width) / 2);
+        const limitY = Math.max(0, (renderedHeight - frameRect.height) / 2);
+        translateX = clamp(translateX, -limitX, limitX);
+        translateY = clamp(translateY, -limitY, limitY);
+      }
+
+      function render() {
+        applyBounds();
+        image.style.transform =
+          `translate(calc(-50% + ${translateX}px), calc(-50% + ${translateY}px)) scale(${baseScale * scale})`;
+      }
+
+      function resetView() {
+        updateRects();
+        baseScale = containScale();
+        minScale = 1;
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        render();
+      }
+
+      function zoomAt(nextScale, clientX, clientY) {
+        updateRects();
+        const rectX = clientX - frameRect.left - frameRect.width / 2;
+        const rectY = clientY - frameRect.top - frameRect.height / 2;
+        const prevRenderedScale = baseScale * scale;
+        const nextRenderedScale = baseScale * nextScale;
+        const ratio = nextRenderedScale / prevRenderedScale;
+
+        translateX = rectX - (rectX - translateX) * ratio;
+        translateY = rectY - (rectY - translateY) * ratio;
+        scale = clamp(nextScale, minScale, maxScale);
+        render();
+      }
+
+      function zoomByStep(factor) {
+        updateRects();
+        const centerX = frameRect.left + frameRect.width / 2;
+        const centerY = frameRect.top + frameRect.height / 2;
+        const nextScale = clamp(scale * factor, minScale, maxScale);
+        zoomAt(nextScale, centerX, centerY);
+      }
+
+      zoomInButton.addEventListener('click', () => zoomByStep(1.2));
+      zoomOutButton.addEventListener('click', () => zoomByStep(0.85));
+      window.addEventListener('resize', resetView);
+
+      frame.addEventListener('wheel', (event) => {
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? 1.12 : 0.9;
+        const nextScale = clamp(scale * delta, minScale, maxScale);
+        zoomAt(nextScale, event.clientX, event.clientY);
+      }, { passive: false });
+
+      frame.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'mouse' && event.pointerType !== 'pen') return;
+        if (scale <= 1) return;
+        isDragging = true;
+        stage.classList.add('dragging');
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
+        startTranslateX = translateX;
+        startTranslateY = translateY;
+        frame.setPointerCapture(event.pointerId);
+      });
+
+      frame.addEventListener('pointermove', (event) => {
+        if (!isDragging) return;
+        translateX = startTranslateX + (event.clientX - dragStartX);
+        translateY = startTranslateY + (event.clientY - dragStartY);
+        render();
+      });
+
+      function endPointerDrag(event) {
+        if (!isDragging) return;
+        isDragging = false;
+        stage.classList.remove('dragging');
+        if (event && frame.hasPointerCapture(event.pointerId)) {
+          frame.releasePointerCapture(event.pointerId);
+        }
+      }
+
+      frame.addEventListener('pointerup', endPointerDrag);
+      frame.addEventListener('pointercancel', endPointerDrag);
+      frame.addEventListener('pointerleave', endPointerDrag);
+
+      frame.addEventListener('touchstart', (event) => {
+        if (event.touches.length === 1 && scale > 1) {
+          const touch = event.touches[0];
+          isDragging = true;
+          dragStartX = touch.clientX;
+          dragStartY = touch.clientY;
+          startTranslateX = translateX;
+          startTranslateY = translateY;
+        }
+      }, { passive: false });
+
+      frame.addEventListener('touchmove', (event) => {
+        if (event.touches.length === 1 && isDragging && scale > 1) {
+          event.preventDefault();
+          const touch = event.touches[0];
+          translateX = startTranslateX + (touch.clientX - dragStartX);
+          translateY = startTranslateY + (touch.clientY - dragStartY);
+          render();
+        }
+      }, { passive: false });
+
+      frame.addEventListener('touchend', (event) => {
+        if (event.touches.length === 0) {
+          isDragging = false;
+        }
+        if (event.touches.length === 1 && scale > 1) {
+          const touch = event.touches[0];
+          dragStartX = touch.clientX;
+          dragStartY = touch.clientY;
+          startTranslateX = translateX;
+          startTranslateY = translateY;
+          isDragging = true;
+        }
+      });
+
+      resetView();
+    }
+
+    document.addEventListener("DOMContentLoaded", loadResult);
+  </script>
+</body>
+</html>

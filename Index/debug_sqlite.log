@@ -1,0 +1,103 @@
+=== INSPECIONANDO BANCO DE DADOS ===
+Caminho: /Users/felipedenuzzo/VSCODE/Mosaico Programas/Index/tiles_index.db
+
+--- TABELAS ---
+Tabela: tiles
+SQL: CREATE TABLE tiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT NOT NULL,
+            path TEXT NOT NULL UNIQUE,
+            filename TEXT NOT NULL,
+            r INTEGER NOT NULL,
+            g INTEGER NOT NULL,
+            b INTEGER NOT NULL,
+            bucket TEXT NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            v1_r INTEGER NOT NULL,
+            v1_g INTEGER NOT NULL,
+            v1_b INTEGER NOT NULL,
+            v2_r INTEGER NOT NULL,
+            v2_g INTEGER NOT NULL,
+            v2_b INTEGER NOT NULL,
+            v3_r INTEGER NOT NULL,
+            v3_g INTEGER NOT NULL,
+            v3_b INTEGER NOT NULL,
+            h1_r INTEGER NOT NULL,
+            h1_g INTEGER NOT NULL,
+            h1_b INTEGER NOT NULL,
+            h2_r INTEGER NOT NULL,
+            h2_g INTEGER NOT NULL,
+            h2_b INTEGER NOT NULL,
+            h3_r INTEGER NOT NULL,
+            h3_g INTEGER NOT NULL,
+            h3_b INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+
+Tabela: sqlite_sequence
+SQL: CREATE TABLE sqlite_sequence(name,seq)
+
+--- INDICES ---
+Indice: sqlite_autoindex_tiles_1 (Tabela: tiles)
+SQL: None
+
+Indice: idx_tiles_categoria (Tabela: tiles)
+SQL: CREATE INDEX idx_tiles_categoria ON tiles(categoria)
+
+Indice: idx_tiles_bucket (Tabela: tiles)
+SQL: CREATE INDEX idx_tiles_bucket ON tiles(bucket)
+
+Indice: idx_tiles_categoria_bucket (Tabela: tiles)
+SQL: CREATE INDEX idx_tiles_categoria_bucket ON tiles(categoria, bucket)
+
+--- ESTRUTURA DA TABELA 'tiles' ---
+Coluna 0: id | Tipo: INTEGER | PK: 1
+Coluna 1: categoria | Tipo: TEXT | PK: 0
+Coluna 2: path | Tipo: TEXT | PK: 0
+Coluna 3: filename | Tipo: TEXT | PK: 0
+Coluna 4: r | Tipo: INTEGER | PK: 0
+Coluna 5: g | Tipo: INTEGER | PK: 0
+Coluna 6: b | Tipo: INTEGER | PK: 0
+Coluna 7: bucket | Tipo: TEXT | PK: 0
+Coluna 8: width | Tipo: INTEGER | PK: 0
+Coluna 9: height | Tipo: INTEGER | PK: 0
+Coluna 10: v1_r | Tipo: INTEGER | PK: 0
+Coluna 11: v1_g | Tipo: INTEGER | PK: 0
+Coluna 12: v1_b | Tipo: INTEGER | PK: 0
+Coluna 13: v2_r | Tipo: INTEGER | PK: 0
+Coluna 14: v2_g | Tipo: INTEGER | PK: 0
+Coluna 15: v2_b | Tipo: INTEGER | PK: 0
+Coluna 16: v3_r | Tipo: INTEGER | PK: 0
+Coluna 17: v3_g | Tipo: INTEGER | PK: 0
+Coluna 18: v3_b | Tipo: INTEGER | PK: 0
+Coluna 19: h1_r | Tipo: INTEGER | PK: 0
+Coluna 20: h1_g | Tipo: INTEGER | PK: 0
+Coluna 21: h1_b | Tipo: INTEGER | PK: 0
+Coluna 22: h2_r | Tipo: INTEGER | PK: 0
+Coluna 23: h2_g | Tipo: INTEGER | PK: 0
+Coluna 24: h2_b | Tipo: INTEGER | PK: 0
+Coluna 25: h3_r | Tipo: INTEGER | PK: 0
+Coluna 26: h3_g | Tipo: INTEGER | PK: 0
+Coluna 27: h3_b | Tipo: INTEGER | PK: 0
+Coluna 28: created_at | Tipo: TEXT | PK: 0
+Coluna 29: updated_at | Tipo: TEXT | PK: 0
+
+--- EXPLAIN QUERY PLAN ---
+Query: SELECT * FROM tiles WHERE categoria = 'Geral'
+  -> SEARCH tiles USING INDEX idx_tiles_categoria (categoria=?)
+Conclusão: usa índice (aparece USING INDEX/SEARCH ... USING INDEX)
+
+Query: SELECT * FROM tiles WHERE bucket = '10_10_10'
+  -> SEARCH tiles USING INDEX idx_tiles_bucket (bucket=?)
+Conclusão: usa índice (aparece USING INDEX/SEARCH ... USING INDEX)
+
+Query: SELECT * FROM tiles WHERE categoria = 'Geral' AND bucket = '10_10_10'
+  -> SEARCH tiles USING INDEX idx_tiles_categoria_bucket (categoria=? AND bucket=?)
+Conclusão: usa índice (aparece USING INDEX/SEARCH ... USING INDEX)
+
+Query: SELECT * FROM tiles WHERE r > 100 AND g > 100
+  -> SCAN tiles
+Conclusão: não usa índice (aparece SCAN ...)
+

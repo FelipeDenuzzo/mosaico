@@ -1,0 +1,19 @@
+{
+  "mosaics": [
+    {
+      "file": "../Output/energiadodesejo-Cover_17_39_01_05_26_000120.jpg",
+      "name": "energiadodesejo-Cover_17_39_01_05_26_000120.jpg",
+      "createdAt": "2026-05-01T20:39:11.435285Z"
+    },
+    {
+      "file": "../Output/IMG_7859_17_42_01_05_26_000121.jpg",
+      "name": "IMG_7859_17_42_01_05_26_000121.jpg",
+      "createdAt": "2026-05-01T20:42:48.245290Z"
+    },
+    {
+      "file": "../Output/IMG_7859_17_43_01_05_26_000122.jpg",
+      "name": "IMG_7859_17_43_01_05_26_000122.jpg",
+      "createdAt": "2026-05-01T20:43:02.647768Z"
+    }
+  ]
+}

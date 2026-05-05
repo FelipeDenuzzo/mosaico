@@ -1,0 +1,16 @@
+.DS_Store
+acervo/
+acervo__/
+archive/
+error/
+input/
+node_modules/
+Output/
+processing/
+Site/Output/
+*.avif
+*.jpg
+*.png
+watcher_log.txt
+mosaico.log
+tiles_index.db

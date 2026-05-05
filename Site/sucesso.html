@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Mosaico pronto!</title>
+  <style>
+    :root {
+      --bg: #ecebe6;
+      --text: #101010;
+      --muted: #4f4f4a;
+      --primary: #0d84d9;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      min-height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      max-width: 380px;
+      width: 100%;
+      background: #f7f6f2;
+      border-radius: 24px;
+      padding: 40px 28px 36px;
+      box-shadow: 0 14px 35px rgba(0,0,0,.08);
+    }
+    .icon {
+      font-size: 3.2rem;
+      margin-bottom: 20px;
+      display: block;
+    }
+    h1 {
+      margin: 0 0 14px;
+      font-size: 2rem;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+    }
+    p {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: .97rem;
+      line-height: 1.55;
+    }
+    .destaque {
+      margin-top: 24px;
+      padding: 14px 18px;
+      background: rgba(13,132,217,.08);
+      border-radius: 14px;
+      font-size: .93rem;
+      color: var(--primary);
+      font-weight: 600;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <span class="icon">✦</span>
+    <h1>Seu mosaico está pronto!</h1>
+    <p>Sua foto foi transformada em um painel feito de memórias da Casa da Memória Italiana.</p>
+    <p>Agora é só olhar para a projeção.</p>
+    <div class="destaque">
+      Veja seu mosaico na tela grande ao lado ✦
+    </div>
+  </main>
+</body>
+</html>

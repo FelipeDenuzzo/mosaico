@@ -1,0 +1,557 @@
+{
+  "IMG_8788_21_42_03_05_26_000154": {
+    "job_id": "IMG_8788_21_42_03_05_26_000154",
+    "status": "erro",
+    "erro": "[Errno 2] No such file or directory: '/Users/felipedenuzzo/VSCODE/Mosaico Programas/input/IMG_8788.jpg'",
+    "timings": {
+      "deteccao_watcher_s": 0.002,
+      "estabilizacao_s": 2.004
+    }
+  },
+  "mockupquadrado_21_43_03_05_26_000155": {
+    "job_id": "mockupquadrado_21_43_03_05_26_000155",
+    "status": "erro",
+    "erro": "Arquivo já existe no archive: /Users/felipedenuzzo/VSCODE/Mosaico Programas/archive/mockupquadrado_21_43_03_05_26_000155.jpg",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005
+    },
+    "timestamp_criacao": "2026-05-03T21:43:31",
+    "nome_original_ux": "mock up quadrado.jpg",
+    "nome_rastreado": "mockupquadrado_21_43_03_05_26_000155"
+  },
+  "mockupquadrado_21_43_03_05_26_0001552_21_46_03_05_26_000156": {
+    "job_id": "mockupquadrado_21_43_03_05_26_0001552_21_46_03_05_26_000156",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.004,
+      "pipeline_mosaico_total_s": 1.863,
+      "finalizacao_s": 0.007,
+      "tempo_total_job_s": 4.439
+    },
+    "timestamp_criacao": "2026-05-03T21:46:35",
+    "nome_original_ux": "mockupquadrado_21_43_03_05_26_000155 2.jpg",
+    "nome_rastreado": "mockupquadrado_21_43_03_05_26_0001552_21_46_03_05_26_000156",
+    "output_url": "/output/mockupquadrado_21_43_03_05_26_0001552_21_46_03_05_26_000156.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/mockupquadrado_21_43_03_05_26_0001552_21_46_03_05_26_000156.avif"
+  },
+  "IMG_8788_09_39_04_05_26_000157": {
+    "job_id": "IMG_8788_09_39_04_05_26_000157",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005,
+      "preparacao_job_tmp_s": 0.004,
+      "pipeline_mosaico_total_s": 3.118,
+      "finalizacao_s": 0.116,
+      "tempo_total_job_s": 6.358
+    },
+    "timestamp_criacao": "2026-05-04T09:39:27",
+    "nome_original_ux": "IMG_8788.jpg",
+    "nome_rastreado": "IMG_8788_09_39_04_05_26_000157",
+    "output_url": "/output/IMG_8788_09_39_04_05_26_000157.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/IMG_8788_09_39_04_05_26_000157.avif"
+  },
+  "FD_2024ago.02_014-3-Editar_09_40_04_05_26_000158": {
+    "job_id": "FD_2024ago.02_014-3-Editar_09_40_04_05_26_000158",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 2.158,
+      "finalizacao_s": 0.114,
+      "tempo_total_job_s": 4.641
+    },
+    "timestamp_criacao": "2026-05-04T09:40:31",
+    "nome_original_ux": "FD_2024ago.02_014-3-Editar.jpg",
+    "nome_rastreado": "FD_2024ago.02_014-3-Editar_09_40_04_05_26_000158",
+    "output_url": "/output/FD_2024ago.02_014-3-Editar_09_40_04_05_26_000158.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2024ago.02_014-3-Editar_09_40_04_05_26_000158.avif"
+  },
+  "ChatGPTImage22dejan.de2026,13_19_36_09_52_04_05_26_000159": {
+    "job_id": "ChatGPTImage22dejan.de2026,13_19_36_09_52_04_05_26_000159",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.001,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 2.216,
+      "finalizacao_s": 0.096,
+      "tempo_total_job_s": 4.71
+    },
+    "timestamp_criacao": "2026-05-04T09:52:47",
+    "nome_original_ux": "ChatGPT Image 22 de jan. de 2026, 13_19_36.jpg",
+    "nome_rastreado": "ChatGPTImage22dejan.de2026,13_19_36_09_52_04_05_26_000159",
+    "output_url": "/output/ChatGPTImage22dejan.de2026,13_19_36_09_52_04_05_26_000159.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/ChatGPTImage22dejan.de2026,13_19_36_09_52_04_05_26_000159.avif"
+  },
+  "ChatGPTImage22dejan.de2026,13_25_48_09_52_04_05_26_000160": {
+    "job_id": "ChatGPTImage22dejan.de2026,13_25_48_09_52_04_05_26_000160",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 2.344,
+      "finalizacao_s": 0.094,
+      "tempo_total_job_s": 5.017
+    },
+    "timestamp_criacao": "2026-05-04T09:52:52",
+    "nome_original_ux": "ChatGPT Image 22 de jan. de 2026, 13_25_48.jpg",
+    "nome_rastreado": "ChatGPTImage22dejan.de2026,13_25_48_09_52_04_05_26_000160",
+    "output_url": "/output/ChatGPTImage22dejan.de2026,13_25_48_09_52_04_05_26_000160.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/ChatGPTImage22dejan.de2026,13_25_48_09_52_04_05_26_000160.avif"
+  },
+  "ChatGPTImage29dejan.de2026,07_41_58_09_52_04_05_26_000161": {
+    "job_id": "ChatGPTImage29dejan.de2026,07_41_58_09_52_04_05_26_000161",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.001,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 1.928,
+      "finalizacao_s": 0.084,
+      "tempo_total_job_s": 5.294
+    },
+    "timestamp_criacao": "2026-05-04T09:52:57",
+    "nome_original_ux": "ChatGPT Image 29 de jan. de 2026, 07_41_58.jpg",
+    "nome_rastreado": "ChatGPTImage29dejan.de2026,07_41_58_09_52_04_05_26_000161",
+    "output_url": "/output/ChatGPTImage29dejan.de2026,07_41_58_09_52_04_05_26_000161.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/ChatGPTImage29dejan.de2026,07_41_58_09_52_04_05_26_000161.avif"
+  },
+  "IMG_3792_09_53_04_05_26_000162": {
+    "job_id": "IMG_3792_09_53_04_05_26_000162",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.787,
+      "finalizacao_s": 0.073,
+      "tempo_total_job_s": 4.076
+    },
+    "timestamp_criacao": "2026-05-04T09:53:02",
+    "nome_original_ux": "IMG_3792.jpg",
+    "nome_rastreado": "IMG_3792_09_53_04_05_26_000162",
+    "output_url": "/output/IMG_3792_09_53_04_05_26_000162.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/IMG_3792_09_53_04_05_26_000162.avif"
+  },
+  "IMG_3793_09_53_04_05_26_000163": {
+    "job_id": "IMG_3793_09_53_04_05_26_000163",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.77,
+      "finalizacao_s": 0.073,
+      "tempo_total_job_s": 4.048
+    },
+    "timestamp_criacao": "2026-05-04T09:53:06",
+    "nome_original_ux": "IMG_3793.jpg",
+    "nome_rastreado": "IMG_3793_09_53_04_05_26_000163",
+    "output_url": "/output/IMG_3793_09_53_04_05_26_000163.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/IMG_3793_09_53_04_05_26_000163.avif"
+  },
+  "IMG_8788_10_34_04_05_26_000164": {
+    "job_id": "IMG_8788_10_34_04_05_26_000164",
+    "status": "erro",
+    "erro": "Arquivo já existe no archive: /Users/felipedenuzzo/VSCODE/Mosaico Programas/archive/IMG_8788_10_34_04_05_26_000164.jpg",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003
+    },
+    "timestamp_criacao": "2026-05-04T10:34:16",
+    "nome_original_ux": "IMG_8788.jpg",
+    "nome_rastreado": "IMG_8788_10_34_04_05_26_000164"
+  },
+  "IMG_8788_10_35_04_05_26_000165": {
+    "job_id": "IMG_8788_10_35_04_05_26_000165",
+    "status": "erro",
+    "erro": "[Errno 5] Input/output error",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005,
+      "preparacao_job_tmp_s": 0.004,
+      "finalizacao_s": 0.002,
+      "tempo_total_job_s": 2.579
+    },
+    "timestamp_criacao": "2026-05-04T10:35:54",
+    "nome_original_ux": "IMG_8788.jpg",
+    "nome_rastreado": "IMG_8788_10_35_04_05_26_000165"
+  },
+  "IMG_8788_10_42_04_05_26_000166": {
+    "job_id": "IMG_8788_10_42_04_05_26_000166",
+    "status": "erro",
+    "erro": "Arquivo já existe no archive: /Users/felipedenuzzo/VSCODE/Mosaico Programas/archive/IMG_8788_10_42_04_05_26_000166.jpg",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.0
+    },
+    "timestamp_criacao": "2026-05-04T10:42:33",
+    "nome_original_ux": "IMG_8788.jpg",
+    "nome_rastreado": "IMG_8788_10_42_04_05_26_000166"
+  },
+  "christian_cravo_06_10_42_04_05_26_000167": {
+    "job_id": "christian_cravo_06_10_42_04_05_26_000167",
+    "status": "erro",
+    "erro": "Arquivo já existe no archive: /Users/felipedenuzzo/VSCODE/Mosaico Programas/archive/christian_cravo_06_10_42_04_05_26_000167.jpg",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004
+    },
+    "timestamp_criacao": "2026-05-04T10:42:56",
+    "nome_original_ux": "christian_cravo_06.jpg",
+    "nome_rastreado": "christian_cravo_06_10_42_04_05_26_000167"
+  },
+  "christian_cravo_06_10_44_04_05_26_000168": {
+    "job_id": "christian_cravo_06_10_44_04_05_26_000168",
+    "status": "erro",
+    "erro": "[Errno 5] Input/output error",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.01,
+      "finalizacao_s": 0.002,
+      "tempo_total_job_s": 2.218
+    },
+    "timestamp_criacao": "2026-05-04T10:44:57",
+    "nome_original_ux": "christian_cravo_06.jpg",
+    "nome_rastreado": "christian_cravo_06_10_44_04_05_26_000168"
+  },
+  "DSC_2880_11_01_04_05_26_000172": {
+    "job_id": "DSC_2880_11_01_04_05_26_000172",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 2.203,
+      "finalizacao_s": 0.053,
+      "tempo_total_job_s": 4.508
+    },
+    "timestamp_criacao": "2026-05-04T11:01:06",
+    "nome_original_ux": "DSC_2880.jpg",
+    "nome_rastreado": "DSC_2880_11_01_04_05_26_000172",
+    "output_url": "/output/DSC_2880_11_01_04_05_26_000172.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/DSC_2880_11_01_04_05_26_000172.avif"
+  },
+  "cao_guimaraes_f_001_11_02_04_05_26_000173": {
+    "job_id": "cao_guimaraes_f_001_11_02_04_05_26_000173",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.001,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 2.258,
+      "finalizacao_s": 0.052,
+      "tempo_total_job_s": 4.475
+    },
+    "timestamp_criacao": "2026-05-04T11:02:27",
+    "nome_original_ux": "cao_guimaraes_f_001.jpg",
+    "nome_rastreado": "cao_guimaraes_f_001_11_02_04_05_26_000173",
+    "output_url": "/output/cao_guimaraes_f_001_11_02_04_05_26_000173.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/cao_guimaraes_f_001_11_02_04_05_26_000173.avif"
+  },
+  "Picture12copy_11_08_04_05_26_000174": {
+    "job_id": "Picture12copy_11_08_04_05_26_000174",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 2.463,
+      "finalizacao_s": 0.055,
+      "tempo_total_job_s": 4.708
+    },
+    "timestamp_criacao": "2026-05-04T11:08:05",
+    "nome_original_ux": "Picture 12 copy.jpg",
+    "nome_rastreado": "Picture12copy_11_08_04_05_26_000174",
+    "output_url": "/output/Picture12copy_11_08_04_05_26_000174.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/Picture12copy_11_08_04_05_26_000174.avif"
+  },
+  "mario_cravo_neto_07_11_15_04_05_26_000175": {
+    "job_id": "mario_cravo_neto_07_11_15_04_05_26_000175",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.766,
+      "finalizacao_s": 0.083,
+      "tempo_total_job_s": 4.082
+    },
+    "timestamp_criacao": "2026-05-04T11:15:48",
+    "nome_original_ux": "mario_cravo_neto_07.jpg",
+    "nome_rastreado": "mario_cravo_neto_07_11_15_04_05_26_000175",
+    "output_url": "/output/mario_cravo_neto_07_11_15_04_05_26_000175.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/mario_cravo_neto_07_11_15_04_05_26_000175.avif"
+  },
+  "capa4_11_18_04_05_26_000176": {
+    "job_id": "capa4_11_18_04_05_26_000176",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.883,
+      "finalizacao_s": 0.05,
+      "tempo_total_job_s": 4.106
+    },
+    "timestamp_criacao": "2026-05-04T11:18:54",
+    "nome_original_ux": "capa4.jpg",
+    "nome_rastreado": "capa4_11_18_04_05_26_000176",
+    "output_url": "/output/capa4_11_18_04_05_26_000176.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/capa4_11_18_04_05_26_000176.avif"
+  },
+  "brandt_coast_11_29_04_05_26_000177": {
+    "job_id": "brandt_coast_11_29_04_05_26_000177",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 2.123,
+      "finalizacao_s": 0.065,
+      "tempo_total_job_s": 4.47
+    },
+    "timestamp_criacao": "2026-05-04T11:29:22",
+    "nome_original_ux": "brandt_coast.jpg",
+    "nome_rastreado": "brandt_coast_11_29_04_05_26_000177",
+    "output_url": "/output/brandt_coast_11_29_04_05_26_000177.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/brandt_coast_11_29_04_05_26_000177.avif"
+  },
+  "FD_2026mai.03_025_12_27_04_05_26_000178": {
+    "job_id": "FD_2026mai.03_025_12_27_04_05_26_000178",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 2.327,
+      "finalizacao_s": 0.209,
+      "tempo_total_job_s": 5.366
+    },
+    "timestamp_criacao": "2026-05-04T12:27:40",
+    "nome_original_ux": "FD_2026mai.03_025.jpg",
+    "nome_rastreado": "FD_2026mai.03_025_12_27_04_05_26_000178",
+    "output_url": "/output/FD_2026mai.03_025_12_27_04_05_26_000178.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_025_12_27_04_05_26_000178.avif"
+  },
+  "FD_2026mai.03_045_12_28_04_05_26_000179": {
+    "job_id": "FD_2026mai.03_045_12_28_04_05_26_000179",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 1.784,
+      "finalizacao_s": 0.202,
+      "tempo_total_job_s": 5.074
+    },
+    "timestamp_criacao": "2026-05-04T12:28:19",
+    "nome_original_ux": "FD_2026mai.03_045.jpg",
+    "nome_rastreado": "FD_2026mai.03_045_12_28_04_05_26_000179",
+    "output_url": "/output/FD_2026mai.03_045_12_28_04_05_26_000179.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_045_12_28_04_05_26_000179.avif"
+  },
+  "mario_cravo_neto_07_12_37_04_05_26_000180": {
+    "job_id": "mario_cravo_neto_07_12_37_04_05_26_000180",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.912,
+      "finalizacao_s": 0.073,
+      "tempo_total_job_s": 4.184
+    },
+    "timestamp_criacao": "2026-05-04T12:37:23",
+    "nome_original_ux": "mario_cravo_neto_07.jpg",
+    "nome_rastreado": "mario_cravo_neto_07_12_37_04_05_26_000180",
+    "output_url": "/output/mario_cravo_neto_07_12_37_04_05_26_000180.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/mario_cravo_neto_07_12_37_04_05_26_000180.avif"
+  },
+  "FD_2026mai.03_014_14_49_04_05_26_000181": {
+    "job_id": "FD_2026mai.03_014_14_49_04_05_26_000181",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.003,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 2.827,
+      "finalizacao_s": 0.222,
+      "tempo_total_job_s": 6.043
+    },
+    "timestamp_criacao": "2026-05-04T14:49:19",
+    "nome_original_ux": "FD_2026mai.03_014.jpg",
+    "nome_rastreado": "FD_2026mai.03_014_14_49_04_05_26_000181",
+    "output_url": "/output/FD_2026mai.03_014_14_49_04_05_26_000181.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_014_14_49_04_05_26_000181.avif"
+  },
+  "FD_2026mai.03_010_14_54_04_05_26_000182": {
+    "job_id": "FD_2026mai.03_010_14_54_04_05_26_000182",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.001,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.004,
+      "pipeline_mosaico_total_s": 2.834,
+      "finalizacao_s": 0.27,
+      "tempo_total_job_s": 6.095
+    },
+    "timestamp_criacao": "2026-05-04T14:54:38",
+    "nome_original_ux": "FD_2026mai.03_010.jpg",
+    "nome_rastreado": "FD_2026mai.03_010_14_54_04_05_26_000182",
+    "output_url": "/output/FD_2026mai.03_010_14_54_04_05_26_000182.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_010_14_54_04_05_26_000182.avif"
+  },
+  "FD_2026mai.03_020_14_59_04_05_26_000183": {
+    "job_id": "FD_2026mai.03_020_14_59_04_05_26_000183",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.001,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.003,
+      "pipeline_mosaico_total_s": 2.35,
+      "finalizacao_s": 0.213,
+      "tempo_total_job_s": 5.344
+    },
+    "timestamp_criacao": "2026-05-04T14:59:01",
+    "nome_original_ux": "FD_2026mai.03_020.jpg",
+    "nome_rastreado": "FD_2026mai.03_020_14_59_04_05_26_000183",
+    "output_url": "/output/FD_2026mai.03_020_14_59_04_05_26_000183.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_020_14_59_04_05_26_000183.avif"
+  },
+  "pagina-10_14_04_05_05_26_000184": {
+    "job_id": "pagina-10_14_04_05_05_26_000184",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.005,
+      "pipeline_mosaico_total_s": 3.152,
+      "finalizacao_s": 0.003,
+      "tempo_total_job_s": 6.288
+    },
+    "timestamp_criacao": "2026-05-05T14:04:50",
+    "nome_original_ux": "pagina-10.jpg",
+    "nome_rastreado": "pagina-10_14_04_05_05_26_000184",
+    "output_url": "/output/pagina-10_14_04_05_05_26_000184.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/pagina-10_14_04_05_05_26_000184.avif"
+  },
+  "pagina-8_14_08_05_05_26_000185": {
+    "job_id": "pagina-8_14_08_05_05_26_000185",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.005,
+      "pipeline_mosaico_total_s": 2.223,
+      "finalizacao_s": 0.117,
+      "tempo_total_job_s": 5.017
+    },
+    "timestamp_criacao": "2026-05-05T14:08:10",
+    "nome_original_ux": "pagina-8.jpg",
+    "nome_rastreado": "pagina-8_14_08_05_05_26_000185",
+    "output_url": "/output/pagina-8_14_08_05_05_26_000185.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/pagina-8_14_08_05_05_26_000185.avif"
+  },
+  "FD_2026mai.04_013_14_08_05_05_26_000186": {
+    "job_id": "FD_2026mai.04_013_14_08_05_05_26_000186",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.748,
+      "finalizacao_s": 0.075,
+      "tempo_total_job_s": 4.127
+    },
+    "timestamp_criacao": "2026-05-05T14:08:39",
+    "nome_original_ux": "FD_2026mai.04_013.jpg",
+    "nome_rastreado": "FD_2026mai.04_013_14_08_05_05_26_000186",
+    "output_url": "/output/FD_2026mai.04_013_14_08_05_05_26_000186.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.04_013_14_08_05_05_26_000186.avif"
+  },
+  "pagina-9_15_19_05_05_26_000187": {
+    "job_id": "pagina-9_15_19_05_05_26_000187",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.004,
+      "pipeline_mosaico_total_s": 2.61,
+      "finalizacao_s": 0.126,
+      "tempo_total_job_s": 5.326
+    },
+    "timestamp_criacao": "2026-05-05T15:19:57",
+    "nome_original_ux": "pagina-9.jpg",
+    "nome_rastreado": "pagina-9_15_19_05_05_26_000187",
+    "output_url": "/output/pagina-9_15_19_05_05_26_000187.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/pagina-9_15_19_05_05_26_000187.avif"
+  },
+  "pagina-7_16_12_05_05_26_000188": {
+    "job_id": "pagina-7_16_12_05_05_26_000188",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.0,
+      "preparacao_job_tmp_s": 0.005,
+      "pipeline_mosaico_total_s": 2.889,
+      "finalizacao_s": 0.126,
+      "tempo_total_job_s": 5.732
+    },
+    "timestamp_criacao": "2026-05-05T16:12:18",
+    "nome_original_ux": "pagina-7.jpg",
+    "nome_rastreado": "pagina-7_16_12_05_05_26_000188",
+    "output_url": "/Output/pagina-7_16_12_05_05_26_000188.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/pagina-7_16_12_05_05_26_000188.avif"
+  },
+  "pagina-8_17_57_05_05_26_000189": {
+    "job_id": "pagina-8_17_57_05_05_26_000189",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.003,
+      "preparacao_job_tmp_s": 0.005,
+      "pipeline_mosaico_total_s": 2.359,
+      "finalizacao_s": 0.126,
+      "tempo_total_job_s": 5.222
+    },
+    "timestamp_criacao": "2026-05-05T17:57:17",
+    "nome_original_ux": "pagina-8.jpg",
+    "nome_rastreado": "pagina-8_17_57_05_05_26_000189",
+    "output_url": "/Output/pagina-8_17_57_05_05_26_000189.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/pagina-8_17_57_05_05_26_000189.avif"
+  }
+}

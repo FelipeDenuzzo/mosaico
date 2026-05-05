@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 600" role="img" aria-labelledby="title desc">
+  <title id="title">Mosaico Online</title>
+  <desc id="desc">Ilustracao leve de blocos coloridos formando uma paisagem abstrata.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e7e4dc"/>
+      <stop offset="1" stop-color="#f7f6f0"/>
+    </linearGradient>
+  </defs>
+  <rect width="860" height="600" fill="url(#bg)"/>
+  <g opacity="0.96">
+    <rect x="36" y="42" width="150" height="110" rx="8" fill="#1e90c8"/>
+    <rect x="196" y="42" width="112" height="110" rx="8" fill="#4ab2a6"/>
+    <rect x="318" y="42" width="96" height="110" rx="8" fill="#c46e54"/>
+    <rect x="424" y="42" width="176" height="110" rx="8" fill="#847f68"/>
+    <rect x="610" y="42" width="214" height="110" rx="8" fill="#355f7d"/>
+
+    <rect x="36" y="162" width="102" height="120" rx="8" fill="#ce9f58"/>
+    <rect x="148" y="162" width="126" height="120" rx="8" fill="#2f7d6a"/>
+    <rect x="284" y="162" width="188" height="120" rx="8" fill="#b7b26e"/>
+    <rect x="482" y="162" width="158" height="120" rx="8" fill="#5f6785"/>
+    <rect x="650" y="162" width="174" height="120" rx="8" fill="#ad7a60"/>
+
+    <rect x="36" y="292" width="138" height="120" rx="8" fill="#718a9c"/>
+    <rect x="184" y="292" width="180" height="120" rx="8" fill="#b25f6d"/>
+    <rect x="374" y="292" width="106" height="120" rx="8" fill="#577f4e"/>
+    <rect x="490" y="292" width="160" height="120" rx="8" fill="#3b95b8"/>
+    <rect x="660" y="292" width="164" height="120" rx="8" fill="#d4a66d"/>
+
+    <rect x="36" y="422" width="120" height="134" rx="8" fill="#5f6d88"/>
+    <rect x="166" y="422" width="156" height="134" rx="8" fill="#8c8465"/>
+    <rect x="332" y="422" width="118" height="134" rx="8" fill="#2d8a86"/>
+    <rect x="460" y="422" width="136" height="134" rx="8" fill="#d07f58"/>
+    <rect x="606" y="422" width="218" height="134" rx="8" fill="#8e5b76"/>
+  </g>
+</svg>
