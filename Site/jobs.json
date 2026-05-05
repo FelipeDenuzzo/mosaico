@@ -553,5 +553,200 @@
     "nome_rastreado": "pagina-8_17_57_05_05_26_000189",
     "output_url": "/Output/pagina-8_17_57_05_05_26_000189.avif",
     "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/pagina-8_17_57_05_05_26_000189.avif"
+  },
+  "3_18_06_05_05_26_000190": {
+    "job_id": "3_18_06_05_05_26_000190",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.005,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 1.957,
+      "finalizacao_s": 0.048,
+      "tempo_total_job_s": 4.159
+    },
+    "timestamp_criacao": "2026-05-05T18:06:46",
+    "nome_original_ux": "3.jpg",
+    "nome_rastreado": "3_18_06_05_05_26_000190",
+    "output_url": "/Output/3_18_06_05_05_26_000190.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/3_18_06_05_05_26_000190.avif"
+  },
+  "1_18_07_05_05_26_000191": {
+    "job_id": "1_18_07_05_05_26_000191",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.0,
+      "preparacao_job_tmp_s": 0.002,
+      "pipeline_mosaico_total_s": 3.333,
+      "finalizacao_s": 0.05,
+      "tempo_total_job_s": 5.574
+    },
+    "timestamp_criacao": "2026-05-05T18:07:42",
+    "nome_original_ux": "1.jpg",
+    "nome_rastreado": "1_18_07_05_05_26_000191",
+    "output_url": "/Output/1_18_07_05_05_26_000191.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/1_18_07_05_05_26_000191.avif"
+  },
+  "FD_2026mai.03_184_18_09_05_05_26_000192": {
+    "job_id": "FD_2026mai.03_184_18_09_05_05_26_000192",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.001,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.007,
+      "pipeline_mosaico_total_s": 2.004,
+      "finalizacao_s": 0.235,
+      "tempo_total_job_s": 6.104
+    },
+    "timestamp_criacao": "2026-05-05T18:09:29",
+    "nome_original_ux": "FD_2026mai.03_184.jpg",
+    "nome_rastreado": "FD_2026mai.03_184_18_09_05_05_26_000192",
+    "output_url": "/Output/FD_2026mai.03_184_18_09_05_05_26_000192.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_184_18_09_05_05_26_000192.avif"
+  },
+  "FD_2026mai.03_190_18_09_05_05_26_000193": {
+    "job_id": "FD_2026mai.03_190_18_09_05_05_26_000193",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.001,
+      "preparacao_job_tmp_s": 0.008,
+      "pipeline_mosaico_total_s": 2.595,
+      "finalizacao_s": 0.326,
+      "tempo_total_job_s": 6.396
+    },
+    "timestamp_criacao": "2026-05-05T18:09:35",
+    "nome_original_ux": "FD_2026mai.03_190.jpg",
+    "nome_rastreado": "FD_2026mai.03_190_18_09_05_05_26_000193",
+    "output_url": "/Output/FD_2026mai.03_190_18_09_05_05_26_000193.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_190_18_09_05_05_26_000193.avif"
+  },
+  "FD_2026mai.03_193_18_09_05_05_26_000194": {
+    "job_id": "FD_2026mai.03_193_18_09_05_05_26_000194",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.0,
+      "preparacao_job_tmp_s": 0.006,
+      "pipeline_mosaico_total_s": 1.905,
+      "finalizacao_s": 0.215,
+      "tempo_total_job_s": 5.414
+    },
+    "timestamp_criacao": "2026-05-05T18:09:41",
+    "nome_original_ux": "FD_2026mai.03_193.jpg",
+    "nome_rastreado": "FD_2026mai.03_193_18_09_05_05_26_000194",
+    "output_url": "/Output/FD_2026mai.03_193_18_09_05_05_26_000194.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_193_18_09_05_05_26_000194.avif"
+  },
+  "FD_2026mai.03_200_18_09_05_05_26_000195": {
+    "job_id": "FD_2026mai.03_200_18_09_05_05_26_000195",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.009,
+      "pipeline_mosaico_total_s": 2.533,
+      "finalizacao_s": 0.288,
+      "tempo_total_job_s": 6.831
+    },
+    "timestamp_criacao": "2026-05-05T18:09:47",
+    "nome_original_ux": "FD_2026mai.03_200.jpg",
+    "nome_rastreado": "FD_2026mai.03_200_18_09_05_05_26_000195",
+    "output_url": "/Output/FD_2026mai.03_200_18_09_05_05_26_000195.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_200_18_09_05_05_26_000195.avif"
+  },
+  "FD_2026mai.03_257_19_47_05_05_26_000196": {
+    "job_id": "FD_2026mai.03_257_19_47_05_05_26_000196",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.001,
+      "estabilizacao_s": 2.0,
+      "preparacao_job_tmp_s": 0.008,
+      "pipeline_mosaico_total_s": 2.692,
+      "finalizacao_s": 0.356,
+      "tempo_total_job_s": 7.688
+    },
+    "timestamp_criacao": "2026-05-05T19:47:34",
+    "nome_original_ux": "FD_2026mai.03_257.jpg",
+    "nome_rastreado": "FD_2026mai.03_257_19_47_05_05_26_000196",
+    "output_url": "/Output/FD_2026mai.03_257_19_47_05_05_26_000196.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_257_19_47_05_05_26_000196.avif"
+  },
+  "FD_2026mai.03_200_19_49_05_05_26_000197": {
+    "job_id": "FD_2026mai.03_200_19_49_05_05_26_000197",
+    "status": "erro",
+    "erro": "[Errno 2] No such file or directory: '/Users/felipedenuzzo/VSCODE/Mosaico Programas/acervo/IMG_3569_18_18_01_05_26_000124.jpg'",
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.001,
+      "preparacao_job_tmp_s": 0.009,
+      "finalizacao_s": 0.003,
+      "tempo_total_job_s": 4.232
+    },
+    "timestamp_criacao": "2026-05-05T19:49:19",
+    "nome_original_ux": "FD_2026mai.03_200.jpg",
+    "nome_rastreado": "FD_2026mai.03_200_19_49_05_05_26_000197"
+  },
+  "FD_2026mai.03_184_19_52_05_05_26_000198": {
+    "job_id": "FD_2026mai.03_184_19_52_05_05_26_000198",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.002,
+      "preparacao_job_tmp_s": 0.007,
+      "pipeline_mosaico_total_s": 1.896,
+      "finalizacao_s": 0.258,
+      "tempo_total_job_s": 6.244
+    },
+    "timestamp_criacao": "2026-05-05T19:52:00",
+    "nome_original_ux": "FD_2026mai.03_184.jpg",
+    "nome_rastreado": "FD_2026mai.03_184_19_52_05_05_26_000198",
+    "output_url": "/Output/FD_2026mai.03_184_19_52_05_05_26_000198.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_184_19_52_05_05_26_000198.avif"
+  },
+  "FD_2026mai.03_246_19_52_05_05_26_000199": {
+    "job_id": "FD_2026mai.03_246_19_52_05_05_26_000199",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.007,
+      "pipeline_mosaico_total_s": 2.612,
+      "finalizacao_s": 0.038,
+      "tempo_total_job_s": 7.195
+    },
+    "timestamp_criacao": "2026-05-05T19:52:48",
+    "nome_original_ux": "FD_2026mai.03_246.jpg",
+    "nome_rastreado": "FD_2026mai.03_246_19_52_05_05_26_000199",
+    "output_url": "/Output/FD_2026mai.03_246_19_52_05_05_26_000199.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_246_19_52_05_05_26_000199.avif"
+  },
+  "FD_2026mai.03_245_20_23_05_05_26_000200": {
+    "job_id": "FD_2026mai.03_245_20_23_05_05_26_000200",
+    "status": "pronto",
+    "erro": null,
+    "timings": {
+      "deteccao_watcher_s": 0.0,
+      "estabilizacao_s": 2.004,
+      "preparacao_job_tmp_s": 0.005,
+      "pipeline_mosaico_total_s": 1.699,
+      "finalizacao_s": 0.294,
+      "tempo_total_job_s": 5.304
+    },
+    "timestamp_criacao": "2026-05-05T20:23:09",
+    "nome_original_ux": "FD_2026mai.03_245.jpg",
+    "nome_rastreado": "FD_2026mai.03_245_20_23_05_05_26_000200",
+    "output_url": "/Output/FD_2026mai.03_245_20_23_05_05_26_000200.avif",
+    "output_path": "/Users/felipedenuzzo/VSCODE/Mosaico Programas/Output/FD_2026mai.03_245_20_23_05_05_26_000200.avif"
   }
 }
