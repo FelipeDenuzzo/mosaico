@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mosaico-exibicao</title>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+    #stage-wrapper { position: relative; width: min(75vh, 100vw); aspect-ratio: 3/4; background: #000; overflow: hidden; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #status {
+      position: absolute; left: 12px; bottom: 12px; z-index: 10;
+      color: rgba(255,255,255,0.65); font-size: 11px;
+      background: rgba(0,0,0,0.35); padding: 6px 8px;
+      border-radius: 6px; pointer-events: none; max-width: calc(100% - 24px);
+    }
+    #panel {
+      display: none; position: absolute; top: 10px; right: 10px; z-index: 100;
+      background: #1a1a1a; color: #eee; border-radius: 8px;
+      padding: 12px 14px; width: 300px;
+      box-shadow: 0 2px 16px #0009; font-size: 12px;
+    }
+    #panel summary { cursor: pointer; font-weight: bold; font-size: 13px; margin-bottom: 10px; }
+    .section { border: 1px solid #444; border-radius: 4px; padding: 8px 10px; margin-bottom: 8px; }
+    .section-title { font-size: 10px; color: #888; font-weight: bold; margin-bottom: 6px; text-transform: uppercase; }
+    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 4px; }
+    .row label { flex: 1; color: #bbb; font-size: 11px; }
+    .row input, .row select { width: 72px; background: #2a2a2a; border: 1px solid #555; color: #eee; border-radius: 3px; padding: 2px 4px; font-size: 11px; }
+    .row select { width: 110px; }
+    .btn-row { display: flex; gap: 6px; margin-top: 10px; }
+    .btn-row button { flex: 1; padding: 6px 4px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+    #apply-btn  { background: #4a9eff; color: #fff; }
+    #restart-btn { background: #ff6b6b; color: #fff; }
+    .slot-row { display: flex; gap: 4px; margin-top: 6px; }
+    .slot-row button { flex: 1; padding: 5px 4px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    .btn-save { background: #2d6a2d; color: #aeffae; }
+    .btn-load { background: #2a2a5a; color: #aaaaff; }
+    .slot-label { font-size: 10px; color: #666; text-align: center; margin-top: 2px; }
+  </style>
+</head>
+<body>
+<div id="stage-wrapper">
+  <div id="status">Carregando galeria...</div>
+
+  <details id="panel">
+    <summary>⚙️ Ajustes (DEV)</summary>
+
+    <form id="panel-form">
+      <div class="section">
+        <div class="section-title">Parede</div>
+        <div class="row"><label>Colunas</label><input name="wallColumns" type="number" min="1" max="20"></div>
+        <div class="row"><label>Espaço (%)</label><input name="wallGap" type="number" min="0" max="20"></div>
+        <div class="row"><label>Espera (ms)</label><input name="wallHoldMs" type="number" min="0" max="60000"></div>
+        <div class="row"><label>Anim entrada/saída (ms)</label><input name="wallZoomMs" type="number" min="100" max="60000"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Zoom</div>
+        <div class="row"><label>1º zoom força</label><input name="zoomA" type="number" step="0.1" min="1" max="20"></div>
+        <div class="row"><label>2º zoom força</label><input name="zoomB" type="number" step="0.1" min="1" max="20"></div>
+        <div class="row"><label>Duração (ms)</label><input name="zoomInMs" type="number" min="100" max="60000"></div>
+        <div class="row"><label>Pausa zoom (ms)</label><input name="zoomHoldMs" type="number" min="0" max="60000"></div>
+        <div class="row"><label>Afastamento (ms)</label><input name="zoomOutMs" type="number" min="100" max="60000"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Pan</div>
+        <div class="row"><label>Desloc. X (%)</label><input name="panAmountX" type="number" min="-100" max="100"></div>
+        <div class="row"><label>Desloc. Y (%)</label><input name="panAmountY" type="number" min="-100" max="100"></div>
+        <div class="row"><label>Direção 1</label>
+          <select name="panDirectionA">
+            <option value="left-down">↙ Esq-Baixo</option>
+            <option value="left-up">↖ Esq-Cima</option>
+            <option value="right-down">↘ Dir-Baixo</option>
+            <option value="right-up">↗ Dir-Cima</option>
+          </select>
+        </div>
+        <div class="row"><label>Direção 2</label>
+          <select name="panDirectionB">
+            <option value="left-down">↙ Esq-Baixo</option>
+            <option value="left-up">↖ Esq-Cima</option>
+            <option value="right-down">↘ Dir-Baixo</option>
+            <option value="right-up">↗ Dir-Cima</option>
+          </select>
+        </div>
+        <div class="row"><label>Duração (ms)</label><input name="panMs" type="number" min="100" max="60000"></div>
+        <div class="row"><label>Pausa após pan (ms)</label><input name="panHoldMs" type="number" min="0" max="60000"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Outras</div>
+        <div class="row"><label>Espera img completa (ms)</label><input name="fullHoldMs" type="number" min="0" max="60000"></div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="apply-btn">Aplicar</button>
+        <button type="button" id="restart-btn">↺ Recomeçar</button>
+      </div>
+
+      <!-- Slots de configuração -->
+      <div class="section" style="margin-top:8px;">
+        <div class="section-title">Configurações Salvas</div>
+        <div class="slot-row">
+          <button type="button" class="btn-save" onclick="salvarSlot(1)">💾 Salvar 1</button>
+          <button type="button" class="btn-load" onclick="carregarSlot(1)">📂 Carregar 1</button>
+        </div>
+        <div class="slot-row">
+          <button type="button" class="btn-save" onclick="salvarSlot(2)">💾 Salvar 2</button>
+          <button type="button" class="btn-load" onclick="carregarSlot(2)">📂 Carregar 2</button>
+        </div>
+        <div id="slot-info" class="slot-label"></div>
+      </div>
+    </form>
+  </details>
+</div>
+
+<script>
+  const STORAGE_KEY_LAST = 'mosaico_settings_last';
+  const STORAGE_KEY_SLOT = (n) => `mosaico_settings_slot${n}`;
+
+  const defaults = {
+    wallColumns: 5, wallGap: 2, wallHoldMs: 8000, wallZoomMs: 1200,
+    zoomA: 3.5, zoomB: 4.5, zoomInMs: 1800, zoomHoldMs: 1200,
+    panMs: 1400, panHoldMs: 800, panAmountX: 18, panAmountY: 10,
+    panDirectionA: 'right-down', panDirectionB: 'left-up',
+    fullHoldMs: 900, zoomOutMs: 1200
+  };
+
+  // Carrega última config usada (ou defaults)
+  const saved = localStorage.getItem(STORAGE_KEY_LAST);
+  const settings = saved ? { ...defaults, ...JSON.parse(saved) } : { ...defaults };
+
+  const MAX_MOSAICS = 5;
+  let manifest = [], wallSprites = [], heroSprite = null;
+  let running = false, interrupted = false;
+  let wallLayer, heroLayer, app, wrapper, statusEl;
+  const textureCache = new Map();
+
+  async function getTexture(path) {
+    if (textureCache.has(path)) return textureCache.get(path);
+    const t = await PIXI.Assets.load(path);
+    textureCache.set(path, t);
+    return t;
+  }
+
+  function setStatus(text) { if (statusEl) statusEl.textContent = text; }
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function easeInOutCubic(t) {
+    return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
+  }
+  function animate({ duration, onUpdate, onComplete }) {
+    const start = performance.now();
+    function frame(now) {
+      if (interrupted) return;
+      const t = Math.min((now - start) / duration, 1);
+      onUpdate(easeInOutCubic(t), t);
+      if (t < 1) requestAnimationFrame(frame);
+      else if (onComplete) onComplete();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function pickBiasedIndex(len) {
+    if (len <= 0) return null;
+    let weights = [], total = 0;
+    for (let i = 0; i < len; i++) { const w = 1/(i+1); weights.push(w); total += w; }
+    let r = Math.random() * total, acc = 0;
+    for (let i = 0; i < len; i++) { acc += weights[i]; if (r <= acc) return i; }
+    return len - 1;
+  }
+
+  // ── Painel ──────────────────────────────────────────
+  function preencherPainel() {
+    const form = document.getElementById('panel-form');
+    for (const k in settings) {
+      if (form[k]) form[k].value = settings[k];
+    }
+  }
+
+  function aplicarControles() {
+    const form = document.getElementById('panel-form');
+    for (const k in settings) {
+      if (form[k]) {
+        settings[k] = typeof defaults[k] === 'number' ? Number(form[k].value) : form[k].value;
+      }
+    }
+    // Salva automaticamente como "última usada"
+    localStorage.setItem(STORAGE_KEY_LAST, JSON.stringify(settings));
+  }
+
+  function salvarSlot(n) {
+    aplicarControles();
+    localStorage.setItem(STORAGE_KEY_SLOT(n), JSON.stringify(settings));
+    document.getElementById('slot-info').textContent = `✅ Config ${n} salva.`;
+    setTimeout(() => document.getElementById('slot-info').textContent = '', 2000);
+  }
+
+  function carregarSlot(n) {
+    const raw = localStorage.getItem(STORAGE_KEY_SLOT(n));
+    if (!raw) {
+      document.getElementById('slot-info').textContent = `⚠️ Config ${n} vazia.`;
+      setTimeout(() => document.getElementById('slot-info').textContent = '', 2000);
+      return;
+    }
+    const loaded = JSON.parse(raw);
+    Object.assign(settings, loaded);
+    preencherPainel();
+    localStorage.setItem(STORAGE_KEY_LAST, JSON.stringify(settings));
+    document.getElementById('slot-info').textContent = `📂 Config ${n} carregada.`;
+    setTimeout(() => document.getElementById('slot-info').textContent = '', 2000);
+  }
+
+  // ── Init ─────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
+    wrapper = document.getElementById('stage-wrapper');
+    statusEl = document.getElementById('status');
+
+    app = new PIXI.Application({ resizeTo: wrapper, background: '#000', antialias: true });
+    wrapper.appendChild(app.view);
+
+    wallLayer = new PIXI.Container();
+    heroLayer = new PIXI.Container();
+    app.stage.addChild(wallLayer);
+    app.stage.addChild(heroLayer);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.code === 'KeyD') {
+        const p = document.getElementById('panel');
+        p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      }
+    });
+
+    preencherPainel();
+    document.getElementById('apply-btn').onclick = aplicarControles;
+    document.getElementById('restart-btn').onclick = () => { aplicarControles(); restart(); };
+
+    startLoop();
+  });
+
+  // ── Loop principal ───────────────────────────────────
+  async function startLoop() {
+    if (running) return;
+    running = true;
+    while (true) {
+      interrupted = false;
+      try {
+        setStatus('Carregando galeria...');
+        manifest = await lerManifest();
+        if (!manifest.length) { setStatus('Nenhuma imagem encontrada.'); await wait(2000); continue; }
+        await mostrarParede();
+        await wait(settings.wallHoldMs);
+        if (interrupted) continue;
+        const heroIndex = pickBiasedIndex(manifest.length);
+        if (heroIndex == null) continue;
+        await animarHero(heroIndex);
+        if (interrupted) continue;
+        await wait(600);
+      } catch(e) {
+        console.error(e);
+        setStatus('⚠️ Erro: ' + e.message);
+        await wait(2000);
+      }
+    }
+  }
+
+  function restart() {
+    interrupted = true;
+    setTimeout(() => { running = false; startLoop(); }, 100);
+  }
+
+  async function lerManifest() {
+    const resp = await fetch('./manifest.json?v=' + Date.now());
+    if (!resp.ok) throw new Error('manifest.json não encontrado');
+    const data = await resp.json();
+    return (Array.isArray(data.mosaics) ? data.mosaics : [])
+      .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, MAX_MOSAICS);
+  }
+
+  function liberarTexturasAntigas(manifestAtivo) {
+    const ativos = new Set(manifestAtivo.map(m => m.file));
+    for (const [path, tex] of textureCache.entries()) {
+      if (!ativos.has(path)) { tex.destroy(true); textureCache.delete(path); }
+    }
+  }
+
+  async function mostrarParede() {
+    wallLayer.removeChildren(); heroLayer.removeChildren(); wallSprites = [];
+    liberarTexturasAntigas(manifest);
+    const cols = Math.max(1, Math.floor(settings.wallColumns));
+    const gap = Math.max(0, settings.wallGap) / 100;
+    const W = wrapper.clientWidth, H = wrapper.clientHeight;
+    const n = manifest.length, rows = Math.ceil(n / cols);
+    const tileW = W / cols * (1-gap), tileH = H / rows * (1-gap);
+    const cellSize = Math.min(tileW, tileH);
+    for (let i = 0; i < n; i++) {
+      const item = manifest[i];
+      const tx = i % cols, ty = Math.floor(i / cols);
+      const texture = await getTexture(item.file);
+      const sprite = new PIXI.Sprite(texture);
+      const cellX = tx * W/cols + gap*W/(2*cols);
+      const cellY = ty * H/rows + gap*H/(2*rows);
+      const iw = texture.width, ih = texture.height;
+      const scale = Math.min(cellSize/iw, cellSize/ih);
+      sprite.width = iw*scale; sprite.height = ih*scale;
+      sprite.x = cellX + (tileW-cellSize)/2 + (cellSize-sprite.width)/2;
+      sprite.y = cellY + (tileH-cellSize)/2 + (cellSize-sprite.height)/2;
+      sprite.interactive = false;
+      wallLayer.addChild(sprite); wallSprites.push(sprite);
+    }
+    setStatus('🖼️ ' + n + ' mosaicos');
+  }
+
+  async function animarHero(idx) {
+    if (!wallSprites[idx]) return;
+    const wallSprite = wallSprites[idx];
+    const item = manifest[idx];
+    const orig = { x: wallSprite.x, y: wallSprite.y, w: wallSprite.width, h: wallSprite.height };
+    const texture = await getTexture(item.file);
+    heroSprite = new PIXI.Sprite(texture);
+    heroSprite.x = orig.x; heroSprite.y = orig.y;
+    heroSprite.width = orig.w; heroSprite.height = orig.h;
+    heroLayer.addChild(heroSprite);
+    wallSprite.visible = false;
+    setStatus('✨ ' + (item.name || item.file));
+    await animar({ from:{...orig}, to:getFullFit(heroSprite), ms:settings.wallZoomMs });
+    if (interrupted) return;
+    await wait(settings.fullHoldMs); if (interrupted) return;
+    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomA), ms:settings.zoomInMs });
+    if (interrupted) return;
+    await wait(settings.zoomHoldMs); if (interrupted) return;
+    await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionA, settings.panMs);
+    if (interrupted) return;
+    await wait(settings.panHoldMs); if (interrupted) return;
+    const p1 = { x:heroSprite.x, y:heroSprite.y, w:heroSprite.width, h:heroSprite.height };
+    await animar({ from:p1, to:getFullFit(heroSprite), ms:settings.zoomOutMs });
+    if (interrupted) return;
+    await wait(settings.fullHoldMs); if (interrupted) return;
+    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomB), ms:settings.zoomInMs });
+    if (interrupted) return;
+    await wait(settings.zoomHoldMs); if (interrupted) return;
+    await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionB, settings.panMs);
+    if (interrupted) return;
+    await wait(settings.panHoldMs); if (interrupted) return;
+    const p2 = { x:heroSprite.x, y:heroSprite.y, w:heroSprite.width, h:heroSprite.height };
+    const full2 = getFullFit(heroSprite);
+    await animar({ from:p2, to:full2, ms:settings.zoomOutMs });
+    if (interrupted) return;
+    await wait(settings.fullHoldMs); if (interrupted) return;
+    await animar({ from:full2, to:{x:wallSprite.x, y:wallSprite.y, w:wallSprite.width, h:wallSprite.height}, ms:settings.wallZoomMs });
+    if (interrupted) return;
+    heroLayer.removeChildren(); wallSprite.visible = true;
+    setStatus('🖼️ Parede pronta.');
+  }
+
+  function animar({ from, to, ms }) {
+    return new Promise(resolve => {
+      animate({
+        duration: ms,
+        onUpdate: (eased) => {
+          heroSprite.x = from.x + (to.x-from.x)*eased;
+          heroSprite.y = from.y + (to.y-from.y)*eased;
+          heroSprite.width = from.w + (to.w-from.w)*eased;
+          heroSprite.height = from.h + (to.h-from.h)*eased;
+        },
+        onComplete: resolve
+      });
+    });
+  }
+
+  function getFullFit(sprite) {
+    const W = wrapper.clientWidth, H = wrapper.clientHeight;
+    const iw = sprite.texture.width, ih = sprite.texture.height;
+    const scale = Math.min(W/iw, H/ih);
+    const w = iw*scale, h = ih*scale;
+    return { x:(W-w)/2, y:(H-h)/2, w, h };
+  }
+
+  function getZoomFit(sprite, zoom) {
+    const W = wrapper.clientWidth, H = wrapper.clientHeight;
+    const iw = sprite.texture.width, ih = sprite.texture.height;
+    const scale = Math.min(W/iw, H/ih) * zoom;
+    const w = iw*scale, h = ih*scale;
+    return { x:(W-w)/2, y:(H-h)/2, w, h };
+  }
+
+  function animarPan(sprite, amountX, amountY, direction, ms) {
+    let dx = (amountX/100)*wrapper.clientWidth;
+    let dy = (amountY/100)*wrapper.clientHeight;
+    switch(direction) {
+      case 'left-down':  dx=-Math.abs(dx); dy= Math.abs(dy); break;
+      case 'left-up':    dx=-Math.abs(dx); dy=-Math.abs(dy); break;
+      case 'right-down': dx= Math.abs(dx); dy= Math.abs(dy); break;
+      default:           dx= Math.abs(dx); dy=-Math.abs(dy); break;
+    }
+    const from = { x:sprite.x, y:sprite.y };
+    return new Promise(resolve => {
+      animate({
+        duration: ms,
+        onUpdate: (eased) => { sprite.x = from.x+dx*eased; sprite.y = from.y+dy*eased; },
+        onComplete: resolve
+      });
+    });
+  }
+
+  window.addEventListener('resize', () => {
+    if (wallSprites.length) mostrarParede();
+    if (heroSprite) {
+      const fit = getFullFit(heroSprite);
+      heroSprite.x=fit.x; heroSprite.y=fit.y; heroSprite.width=fit.w; heroSprite.height=fit.h;
+    }
+  });
+</script>
+</body>
+</html>
