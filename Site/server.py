@@ -7,14 +7,18 @@ import os
 import json
 from pathlib import Path
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 
 app = Flask(__name__)
+CORS(app, origins=["http://127.0.0.1:8000"])
+
 
 BASE_DIR = Path("/Users/felipedenuzzo/VSCODE/Mosaico Programas")
 INPUT_DIR = BASE_DIR / "input"
 OUTPUT_DIR = BASE_DIR / "Output"
 JOBS_PATH = BASE_DIR / "Site" / "jobs.json"
+
 
 INPUT_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -30,12 +34,18 @@ def _load_jobs() -> dict:
     return {}
 
 
-@app.post("/gerar")
+@app.route("/gerar", methods=["POST", "OPTIONS"])
 def gerar():
     """
     Recebe upload de imagem e deposita em input/ para o watcher processar.
     Retorna o nome original para rastreamento do job.
     """
+
+    # Preflight CORS (request OPTIONS enviado pelo navegador antes do POST)
+    if request.method == "OPTIONS":
+        # flask-cors já injeta os cabeçalhos de CORS na resposta
+        return ("", 200)
+
     if "imagem" not in request.files:
         return jsonify({"ok": False, "erro": "Campo 'imagem' ausente."}), 400
 
@@ -45,7 +55,10 @@ def gerar():
 
     destino = INPUT_DIR / arquivo.filename
     if destino.exists():
-        return jsonify({"ok": False, "erro": f"Arquivo '{arquivo.filename}' já está na fila."}), 409
+        return jsonify({
+            "ok": False,
+            "erro": f"Arquivo '{arquivo.filename}' já está na fila."
+        }), 409
 
     arquivo.save(destino)
 
@@ -67,6 +80,7 @@ def status(nome_original: str):
     # Procura pelo nome_original_ux registrado no job
     for job_id, job in jobs.items():
         if job.get("nome_original_ux") == nome_original:
+            job["ok"] = True
             return jsonify(job)
 
     return jsonify({"ok": False, "erro": "Job não encontrado."}), 404

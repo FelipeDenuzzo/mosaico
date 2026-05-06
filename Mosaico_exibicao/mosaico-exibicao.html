@@ -257,6 +257,7 @@
         if (heroIndex == null) continue;
         await animarHero(heroIndex);
         if (interrupted) continue;
+        await verificarFila();
         await wait(600);
       } catch(e) {
         console.error(e);
@@ -269,6 +270,20 @@
   function restart() {
     interrupted = true;
     setTimeout(() => { running = false; startLoop(); }, 100);
+  }
+
+  async function verificarFila() {
+    try {
+      const res = await fetch('http://localhost:8081/next', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          console.log('Rotacionado para parede:', data.rotated);
+        }
+      }
+    } catch(e) {
+      console.warn('Serviço de fila indisponível ou offline:', e.message);
+    }
   }
 
   async function lerManifest() {
