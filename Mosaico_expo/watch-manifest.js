@@ -11,7 +11,7 @@ const VALID_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
 const MAX_MOSAICS = 5;
 const PORT = 8081;
 
-let state = { mosaics: [], queue: [], seen: [], isBusy: false };
+let state = { mosaics: [], queue: [], seen: [], isBusy: false, isBusyTimestamp: 0 };
 
 function readCurrentManifest() {
   try {
@@ -21,7 +21,8 @@ function readCurrentManifest() {
       mosaics: Array.isArray(json.mosaics) ? json.mosaics : [],
       queue: Array.isArray(json.queue) ? json.queue : [],
       seen: Array.isArray(json.seen) ? json.seen : [],
-      isBusy: typeof json.isBusy === 'boolean' ? json.isBusy : false
+      isBusy: typeof json.isBusy === 'boolean' ? json.isBusy : false,
+      isBusyTimestamp: typeof json.isBusyTimestamp === 'number' ? json.isBusyTimestamp : 0
     };
   } catch (e) {
     return { mosaics: [], queue: [], seen: [], isBusy: false };
@@ -69,6 +70,7 @@ function syncWithFolder(isStartup = false) {
     }
     state.queue = [];
     state.isBusy = false; // Reset busy status on boot
+    state.isBusyTimestamp = 0;
   } else {
     state.queue = state.queue.filter(m => validFiles.has(m.name));
   }
@@ -112,6 +114,7 @@ function syncWithFolder(isStartup = false) {
     state.queue.push(...novos);
     state.queue.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     state.isBusy = true;
+    state.isBusyTimestamp = Date.now();
   }
 
   while (state.mosaics.length < MAX_MOSAICS && state.queue.length > 0) {
@@ -211,11 +214,13 @@ const server = http.createServer((req, res) => {
     }
   } else if (req.method === 'POST' && req.url === '/busy') {
     state.isBusy = true;
+    state.isBusyTimestamp = Date.now();
     saveManifest();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, isBusy: true }));
   } else if (req.method === 'POST' && req.url === '/idle') {
     state.isBusy = false;
+    state.isBusyTimestamp = 0;
     saveManifest();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true, isBusy: false }));

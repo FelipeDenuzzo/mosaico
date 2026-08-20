@@ -430,6 +430,14 @@
   async function startLoop() {
     if (running) return;
     running = true;
+    
+    // Forçar liberação da câmera no boot do frontend (evita trava se houver reload)
+    try {
+      await setExhibitionStatus(false);
+    } catch(e) {
+      console.warn('Erro ao inicializar status de exposição no boot:', e);
+    }
+    
     while (true) {
       interrupted = false;
       try {

@@ -25,7 +25,15 @@ def is_camera_unlocked():
             with open(manifest_path, "r") as f:
                 data = json.load(f)
                 is_busy = data.get("isBusy", False)
+                is_busy_timestamp = data.get("isBusyTimestamp", 0)
                 queue = data.get("queue", [])
+                
+                # Watchdog: se isBusy estiver true por mais de 45 segundos, ignoramos a trava
+                if is_busy and is_busy_timestamp > 0:
+                    age_ms = time.time() * 1000 - is_busy_timestamp
+                    if age_ms > 45000:
+                        is_busy = False # Ignora a trava (evita deadlocks se o navegador suspender)
+                        
                 if is_busy or len(queue) > 0:
                     return False
         except Exception:
