@@ -135,6 +135,7 @@
 
   const MAX_MOSAICS = 5;
   let manifest = [], wallSprites = [], heroSprite = null;
+  let queueCount = 0;
   let running = false, interrupted = false;
   let wallLayer, heroLayer, app, wrapper, statusEl;
   const textureCache = new Map();
@@ -147,6 +148,14 @@
   }
 
   function setStatus(text) { if (statusEl) statusEl.textContent = text; }
+  function getProductionStatusText() {
+    return queueCount > 0
+      ? 'Os mosaicos estão sendo feitos'
+      : '- nenhum mosaico em produção';
+  }
+  function updateProductionStatus() {
+    setStatus(getProductionStatusText());
+  }
   function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
   function easeInOutCubic(t) {
     return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2;
@@ -248,7 +257,9 @@
       interrupted = false;
       try {
         setStatus('Carregando galeria...');
-        manifest = await lerManifest();
+        const manifestData = await lerManifest();
+        manifest = manifestData.mosaics;
+        queueCount = manifestData.queueCount;
         if (!manifest.length) { setStatus('Nenhuma imagem encontrada.'); await wait(2000); continue; }
         await mostrarParede();
         await wait(settings.wallHoldMs);
@@ -278,7 +289,12 @@
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
+          if (typeof data.queue === 'number') queueCount = data.queue;
+          updateProductionStatus();
           console.log('Rotacionado para parede:', data.rotated);
+        } else {
+          queueCount = 0;
+          updateProductionStatus();
         }
       }
     } catch(e) {
@@ -290,9 +306,11 @@
     const resp = await fetch('./manifest.json?v=' + Date.now());
     if (!resp.ok) throw new Error('manifest.json não encontrado');
     const data = await resp.json();
-    return (Array.isArray(data.mosaics) ? data.mosaics : [])
+    const mosaics = (Array.isArray(data.mosaics) ? data.mosaics : [])
       .sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, MAX_MOSAICS);
+    const queue = Array.isArray(data.queue) ? data.queue : [];
+    return { mosaics, queueCount: queue.length };
   }
 
   function liberarTexturasAntigas(manifestAtivo) {
@@ -326,7 +344,7 @@
       sprite.interactive = false;
       wallLayer.addChild(sprite); wallSprites.push(sprite);
     }
-    setStatus('🖼️ ' + n + ' mosaicos');
+    updateProductionStatus();
   }
 
   async function animarHero(idx) {
@@ -340,7 +358,6 @@
     heroSprite.width = orig.w; heroSprite.height = orig.h;
     heroLayer.addChild(heroSprite);
     wallSprite.visible = false;
-    setStatus('✨ ' + (item.name || item.file));
     await animar({ from:{...orig}, to:getFullFit(heroSprite), ms:settings.wallZoomMs });
     if (interrupted) return;
     await wait(settings.fullHoldMs); if (interrupted) return;
@@ -368,7 +385,7 @@
     await animar({ from:full2, to:{x:wallSprite.x, y:wallSprite.y, w:wallSprite.width, h:wallSprite.height}, ms:settings.wallZoomMs });
     if (interrupted) return;
     heroLayer.removeChildren(); wallSprite.visible = true;
-    setStatus('🖼️ Parede pronta.');
+    updateProductionStatus();
   }
 
   function animar({ from, to, ms }) {

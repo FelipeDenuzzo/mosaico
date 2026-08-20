@@ -1,0 +1,6 @@
+Flask
+flask-cors
+Pillow
+pillow-heif
+pillow-avif-plugin
+opencv-python-headless==4.8.0.76

@@ -3,12 +3,9 @@ const path = require('path');
 const chokidar = require('chokidar');
 const http = require('http');
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname);
 const OUTPUT_DIR = path.join(ROOT, 'Output');
-const EXIBICAO_DIR = path.join(ROOT, 'Mosaico_exibicao');
-const MANIFEST_PATH = path.join(EXIBICAO_DIR, 'manifest.json');
-const SITE_EXIBICAO_DIR = path.join(ROOT, 'Site', 'Mosaico_exibicao');
-const SITE_MANIFEST_PATH = path.join(SITE_EXIBICAO_DIR, 'manifest.json');
+const MANIFEST_PATH = path.join(ROOT, 'manifest.json');
 
 const VALID_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
 const MAX_MOSAICS = 5;
@@ -34,9 +31,6 @@ function saveManifest() {
   const newJson = JSON.stringify(state, null, 2);
   try {
     fs.writeFileSync(MANIFEST_PATH, newJson, 'utf8');
-    if (fs.existsSync(SITE_EXIBICAO_DIR)) {
-      fs.writeFileSync(SITE_MANIFEST_PATH, newJson, 'utf8');
-    }
     console.log(`[watch-manifest] Manifest atualizado: ${state.mosaics.length} exibidos, ${state.queue.length} na fila.`);
   } catch(e) {
     console.error('[watch-manifest] Erro ao salvar manifest:', e);
@@ -100,7 +94,7 @@ function syncWithFolder(isStartup = false) {
     }
   }
 
-  novos.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  novos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   
   // Transição do estado inchado antigo:
   // Se já tínhamos mais mosaicos do que o permitido (ex: 102),
@@ -114,6 +108,7 @@ function syncWithFolder(isStartup = false) {
 
   if (novos.length > 0) {
     state.queue.push(...novos);
+    state.queue.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   while (state.mosaics.length < MAX_MOSAICS && state.queue.length > 0) {
@@ -140,7 +135,29 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  if (req.method === 'POST' && req.url === '/next') {
+  if (req.method === 'POST' && req.url === '/config-camera') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        const intervalSeconds = parseInt(data.intervalSeconds, 10);
+        if (isNaN(intervalSeconds) || intervalSeconds < 5) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Intervalo inválido. Mínimo 5 segundos.' }));
+          return;
+        }
+        const configPath = path.join(ROOT, 'camera_config.json');
+        fs.writeFileSync(configPath, JSON.stringify({ intervalSeconds }, null, 2), 'utf8');
+        console.log(`[watch-manifest] Configuração da câmera salva: ${intervalSeconds}s`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, intervalSeconds }));
+      } catch (e) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'JSON inválido' }));
+      }
+    });
+  } else if (req.method === 'POST' && req.url === '/next') {
     if (state.queue.length > 0) {
       const nextItem = state.queue.shift();
       if (state.mosaics.length >= MAX_MOSAICS) {

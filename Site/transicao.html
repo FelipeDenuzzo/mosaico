@@ -150,9 +150,20 @@
       statusMsg.textContent = fraseAleatoria();
       escolherFotoCasa();
 
+      const POLL_INTERVAL_MS = 2000;
+      function scheduleNextCheck() {
+        setTimeout(checkStatus, POLL_INTERVAL_MS);
+      }
+
       async function checkStatus() {
         try {
           const resp = await fetch(`http://127.0.0.1:5000/status/${encodeURIComponent(jobId)}`);
+          if (!resp.ok) {
+            hintMsg.textContent = 'Estamos acompanhando seu mosaico. Tentando novamente...';
+            scheduleNextCheck();
+            return;
+          }
+
           const data = await resp.json();
 
           if (data.ok && data.status === 'pronto' && data.output_url) {
@@ -169,12 +180,14 @@
             hintMsg.textContent = '';
           } else {
             // não muda frase nem foto; apenas continua acompanhando o job
-            setTimeout(checkStatus, 2000);
+            hintMsg.textContent = 'Aguarde, você será redirecionado automaticamente quando o mosaico estiver pronto.';
+            scheduleNextCheck();
           }
         } catch (e) {
-          statusTitle.textContent = 'Erro de conexão';
-          statusMsg.textContent = 'Não foi possível consultar o status do job.';
-          hintMsg.textContent = '';
+          // Mantém a frase da casa visível e segue tentando em caso de falha temporária.
+          statusTitle.textContent = 'Montando o seu mosaico';
+          hintMsg.textContent = 'Conexão instável. Continuamos tentando automaticamente...';
+          scheduleNextCheck();
         }
       }
 

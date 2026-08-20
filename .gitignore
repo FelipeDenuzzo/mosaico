@@ -1,4 +1,6 @@
 .DS_Store
+__pycache__/
+*.pyc
 acervo/
 acervo__/
 archive/
@@ -14,3 +16,10 @@ Site/Output/
 watcher_log.txt
 mosaico.log
 tiles_index.db
+*.log
+*.log*
+camera_config.json
+jobs.json
+manifest.json
+tiles_index.db*
+

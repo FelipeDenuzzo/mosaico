@@ -9,8 +9,57 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
     body { display: flex; align-items: center; justify-content: center; }
-    #stage-wrapper { position: relative; width: min(75vh, 100vw); aspect-ratio: 3/4; background: #000; overflow: hidden; }
+    #stage-wrapper { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; }
     canvas { display: block; width: 100%; height: 100%; }
+
+    /* Barra de carregamento do Mosaico em Produção */
+    #loading-bar-container {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(20, 20, 20, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 14px 20px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      z-index: 99;
+      width: min(400px, 90vw);
+      opacity: 0;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #loading-bar-container.active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+    #loading-bar-text {
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+    #loading-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    #loading-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #00f2fe 0%, #4facfe 100%);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 8px rgba(79, 172, 254, 0.8);
+    }
     #status {
       position: absolute; left: 12px; bottom: 12px; z-index: 10;
       color: rgba(255,255,255,0.65); font-size: 11px;
@@ -44,6 +93,14 @@
 <body>
 <div id="stage-wrapper">
   <div id="status">Carregando galeria...</div>
+
+  <!-- Barra de Carregamento -->
+  <div id="loading-bar-container">
+    <div id="loading-bar-text">Mosaico sendo construído...</div>
+    <div id="loading-bar-bg">
+      <div id="loading-bar-fill"></div>
+    </div>
+  </div>
 
   <details id="panel">
     <summary>⚙️ Ajustes (DEV)</summary>
@@ -93,6 +150,7 @@
       <div class="section">
         <div class="section-title">Outras</div>
         <div class="row"><label>Espera img completa (ms)</label><input name="fullHoldMs" type="number" min="0" max="60000"></div>
+        <div class="row"><label>Intervalo Câmera (s)</label><input name="cameraInterval" type="number" min="5" max="3600"></div>
       </div>
 
       <div class="btn-row">
@@ -126,7 +184,7 @@
     zoomA: 3.5, zoomB: 4.5, zoomInMs: 1800, zoomHoldMs: 1200,
     panMs: 1400, panHoldMs: 800, panAmountX: 18, panAmountY: 10,
     panDirectionA: 'right-down', panDirectionB: 'left-up',
-    fullHoldMs: 900, zoomOutMs: 1200
+    fullHoldMs: 900, zoomOutMs: 1200, cameraInterval: 60
   };
 
   // Carrega última config usada (ou defaults)
@@ -139,6 +197,15 @@
   let running = false, interrupted = false;
   let wallLayer, heroLayer, app, wrapper, statusEl;
   const textureCache = new Map();
+
+  // Filtragem de novos mosaicos (sessão atual)
+  const preExistingFiles = new Set();
+  const zoomedFiles = new Set();
+  let isInitialLoad = true;
+
+  // Lógica de monitoramento de jobs / barra de carregamento
+  let activeJobId = null;
+  let progressInterval = null;
 
   async function getTexture(path) {
     if (textureCache.has(path)) return textureCache.get(path);
@@ -189,7 +256,7 @@
     }
   }
 
-  function aplicarControles() {
+  async function aplicarControles() {
     const form = document.getElementById('panel-form');
     for (const k in settings) {
       if (form[k]) {
@@ -198,6 +265,24 @@
     }
     // Salva automaticamente como "última usada"
     localStorage.setItem(STORAGE_KEY_LAST, JSON.stringify(settings));
+
+    // Envia o novo intervalo de segundos para o backend da câmera
+    if (settings.cameraInterval) {
+      try {
+        const res = await fetch('http://localhost:8081/config-camera', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intervalSeconds: settings.cameraInterval })
+        });
+        if (res.ok) {
+          console.log('✓ Intervalo da câmera sincronizado no backend:', settings.cameraInterval);
+        } else {
+          console.error('Falha ao sincronizar intervalo da câmera no backend');
+        }
+      } catch (e) {
+        console.warn('Servidor backend offline; não pôde sincronizar intervalo da câmera:', e.message);
+      }
+    }
   }
 
   function salvarSlot(n) {
@@ -246,8 +331,72 @@
     document.getElementById('apply-btn').onclick = aplicarControles;
     document.getElementById('restart-btn').onclick = () => { aplicarControles(); restart(); };
 
+    // Monitoramento dos jobs para a barra de carregamento
+    monitorJobs();
+    setInterval(monitorJobs, 1500);
+
     startLoop();
   });
+
+  function updateLoadingBar(isActive, jobId) {
+    const container = document.getElementById('loading-bar-container');
+    const fill = document.getElementById('loading-bar-fill');
+    
+    if (isActive) {
+      container.classList.add('active');
+      if (jobId !== activeJobId) {
+        activeJobId = jobId;
+        fill.style.width = '0%';
+        
+        // Limpar intervalo anterior se houver
+        if (progressInterval) clearInterval(progressInterval);
+        
+        // Simular progresso suave até 92% em 5 segundos
+        const startTime = Date.now();
+        const duration = 5000; 
+        progressInterval = setInterval(() => {
+          const elapsed = Date.now() - startTime;
+          let p = (elapsed / duration) * 92;
+          if (p > 92) {
+            p = 92 + Math.sin(elapsed / 1000) * 2; // pulso lento no final
+          }
+          fill.style.width = `${p}%`;
+        }, 100);
+      }
+    } else {
+      if (activeJobId) {
+        activeJobId = null;
+        if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+        fill.style.width = '100%';
+        setTimeout(() => {
+          if (!activeJobId) {
+            container.classList.remove('active');
+          }
+        }, 800);
+      }
+    }
+  }
+
+  async function monitorJobs() {
+    try {
+      const res = await fetch('./jobs.json?v=' + Date.now());
+      if (res.ok) {
+        const jobs = await res.json();
+        let processingJobId = null;
+        
+        for (const id in jobs) {
+          if (jobs[id].status === 'processando') {
+            processingJobId = id;
+            break;
+          }
+        }
+        
+        updateLoadingBar(!!processingJobId, processingJobId);
+      }
+    } catch (e) {
+      console.warn('Erro ao carregar jobs.json:', e);
+    }
+  }
 
   // ── Loop principal ───────────────────────────────────
   async function startLoop() {
@@ -261,12 +410,30 @@
         manifest = manifestData.mosaics;
         queueCount = manifestData.queueCount;
         if (!manifest.length) { setStatus('Nenhuma imagem encontrada.'); await wait(2000); continue; }
+        
+        if (isInitialLoad) {
+          manifest.forEach(m => preExistingFiles.add(m.file));
+          isInitialLoad = false;
+        }
+
         await mostrarParede();
-        await wait(settings.wallHoldMs);
-        if (interrupted) continue;
-        const heroIndex = pickBiasedIndex(manifest.length);
-        if (heroIndex == null) continue;
-        await animarHero(heroIndex);
+        
+        // Buscar candidatos para zoom: novos mosaicos ainda não mostrados nesta sessão
+        const candidates = manifest.filter(m => !preExistingFiles.has(m.file) && !zoomedFiles.has(m.file));
+        
+        if (candidates.length > 0) {
+          // Dar zoom no candidato mais recente (menor índice no manifest ordenado de forma decrescente)
+          const targetItem = candidates[0];
+          const targetIndex = manifest.findIndex(m => m.file === targetItem.file);
+          if (targetIndex !== -1) {
+            await animarHero(targetIndex);
+            zoomedFiles.add(targetItem.file);
+          }
+        } else {
+          // Se não houver novos mosaicos na parede, apenas mostra o painel e aguarda pollar por novos
+          await wait(2000);
+        }
+        
         if (interrupted) continue;
         await verificarFila();
         await wait(600);
@@ -326,16 +493,25 @@
     const cols = Math.max(1, Math.floor(settings.wallColumns));
     const gap = Math.max(0, settings.wallGap) / 100;
     const W = wrapper.clientWidth, H = wrapper.clientHeight;
+    
+    // Região central retangular com proporção 3:4 (limite de altura H e largura H * 0.75)
+    const wallW = Math.min(H * 0.75, W);
+    const wallH = wallW * (4/3);
+    const wallX = (W - wallW) / 2;
+    const wallY = (H - wallH) / 2;
+
     const n = manifest.length, rows = Math.ceil(n / cols);
-    const tileW = W / cols * (1-gap), tileH = H / rows * (1-gap);
+    const tileW = wallW / cols * (1-gap), tileH = wallH / rows * (1-gap);
     const cellSize = Math.min(tileW, tileH);
     for (let i = 0; i < n; i++) {
       const item = manifest[i];
       const tx = i % cols, ty = Math.floor(i / cols);
       const texture = await getTexture(item.file);
       const sprite = new PIXI.Sprite(texture);
-      const cellX = tx * W/cols + gap*W/(2*cols);
-      const cellY = ty * H/rows + gap*H/(2*rows);
+      
+      // Coordenadas relativas à caixa central da parede
+      const cellX = wallX + tx * wallW/cols + gap*wallW/(2*cols);
+      const cellY = wallY + ty * wallH/rows + gap*wallH/(2*rows);
       const iw = texture.width, ih = texture.height;
       const scale = Math.min(cellSize/iw, cellSize/ih);
       sprite.width = iw*scale; sprite.height = ih*scale;

@@ -16,9 +16,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 from heapq import nsmallest
 from threading import Lock
-from typing import Callable, Dict, List, Optional, Tuple
 import math
 from PIL import Image
+import pillow_avif  # registra suporte AVIF no Pillow
+
 
 FIXED_COLUMNS = 146
 FIXED_TILE_SIZE = 30
@@ -26,8 +27,8 @@ FIXED_COLOR_VARIATION = 20
 FIXED_MAX_REPETITIONS = 2
 MIN_BASE_WIDTH = 1000
 FIXED_OUTPUT_WIDTH = FIXED_COLUMNS * FIXED_TILE_SIZE
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DEFAULT_INDEX_DB_PATH = os.path.join(PROJECT_ROOT, "Index", "tiles_index.db")
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_INDEX_DB_PATH = os.path.join(PROJECT_ROOT, "tiles_index.db")
 INDEX_DB_PATH = os.getenv("MOSAICO_INDEX_DB_PATH", DEFAULT_INDEX_DB_PATH)
 SQLITE_PREFILTER_LIMIT = 180
 COLOR_BUCKET_SIZE = 16
@@ -39,13 +40,36 @@ ENABLE_TILE_PRELOAD = os.getenv("MOSAICO_TILE_PRELOAD", "1") == "1"
 DEBUG_LOG_PATH = os.path.join(os.path.dirname(__file__), "debug_mosaico.log")
 PRODUCTION_LOG_PATH = os.path.join(os.path.dirname(__file__), "producao_mosaico.log")
 
+# --------------------------------------------------
+# Priorização por recência (ajuste opcional)
+# --------------------------------------------------
+RECENCIA_BONUS_MAX = 8          # desconto máximo na distância² de cor
+RECENCIA_TOP_N = 20             # nº de candidatos onde o bônus atua
+RECENCIA_JANELA_DIAS = 30       # últimos N dias contam como “recentes”
+
 
 _CATALOGO_CACHE_LOCK = Lock()
 _CATALOGO_CACHE_DB_FINGERPRINT: Optional[Tuple[int, int]] = None
-_CATALOGO_CACHE_BY_CATEGORY: Dict[str, List[Tuple[str, Tuple[int, int, int]]]] = {}
+# path, (r,g,b), created_at
+_CATALOGO_CACHE_BY_CATEGORY: Dict[str, List[Tuple[str, Tuple[int, int, int], str]]] = {}
 _TILE_PRELOAD_LOCK = Lock()
 _TILE_PRELOAD_FINGERPRINT: Optional[Tuple[Optional[Tuple[int, int]], int]] = None
 _TILE_PRELOAD_STORE: Dict[str, Image.Image] = {}
+
+
+def invalidar_cache_catalogo() -> None:
+    """
+    Força recarga completa do acervo na próxima chamada a
+    _carregar_catalogo_descritores_cacheado() e ao preload de tiles.
+    Deve ser chamada após inserção de novos tiles no banco.
+    """
+    global _CATALOGO_CACHE_DB_FINGERPRINT, _TILE_PRELOAD_FINGERPRINT
+    with _CATALOGO_CACHE_LOCK:
+        _CATALOGO_CACHE_DB_FINGERPRINT = None
+        _CATALOGO_CACHE_BY_CATEGORY.clear()
+    with _TILE_PRELOAD_LOCK:
+        _TILE_PRELOAD_FINGERPRINT = None
+        _TILE_PRELOAD_STORE.clear()
 
 
 def debug_log(msg: str) -> None:
@@ -145,6 +169,7 @@ class TileInfo:
     path: str
     average_color: Tuple[int, int, int]
     uses: int = 0
+    created_at: str = ""   # ISO 8601 ou vazio se não houver
 
 
 def obter_cor_media(imagem: Image.Image) -> Tuple[int, int, int]:
@@ -165,14 +190,17 @@ def _distancia_cor_quadrada(cor_a: Tuple[int, int, int], cor_b: Tuple[int, int, 
     return (dr * dr) + (dg * dg) + (db * db)
 
 
-def carregar_pixels(categoria: str, conn: sqlite3.Connection) -> List[TileInfo]:
+def carregar_pixels(conn: sqlite3.Connection) -> List[TileInfo]:
     """
-    Carrega metadados das imagens de uma categoria do índice SQLite.
+    Carrega metadados de todos os tiles do índice SQLite.
     Não varre pastas manualmente; usa apenas o banco de dados.
     """
-    sql = """SELECT path, r, g, b FROM tiles WHERE categoria = ?"""
-    rows = conn.execute(sql, (categoria,)).fetchall()
-    return [TileInfo(path=row[0], average_color=(row[1], row[2], row[3])) for row in rows]
+    sql = """SELECT path, r, g, b, created_at FROM tiles"""
+    rows = conn.execute(sql).fetchall()
+    return [
+        TileInfo(path=row[0], average_color=(row[1], row[2], row[3]), created_at=row[4] or "")
+        for row in rows
+    ]
 
 
 def _normalizar_texto(valor: str) -> str:
@@ -183,8 +211,7 @@ def _normalizar_texto(valor: str) -> str:
 
 def _validar_categoria_index(categoria: str) -> bool:
     """
-    Valida se a categoria é uma das conhecidas.
-    Agora categorias são strings lógicas (Informacao, Medicamentos, Pornografia, Geral).
+    Mantida por compatibilidade com outros módulos legados.
     """
     categorias_validas = {"Informacao", "Medicamentos", "Pornografia", "Geral"}
     return categoria in categorias_validas
@@ -209,7 +236,7 @@ def _carregar_catalogo_categoria_index(
 ) -> List[TileInfo]:
     t_sql = time.perf_counter()
     sql = """
-        SELECT path, r, g, b
+        SELECT path, r, g, b, created_at
         FROM tiles
         WHERE categoria = ?
     """
@@ -218,7 +245,10 @@ def _carregar_catalogo_categoria_index(
     rows = conn.execute(sql, params).fetchall()
     debug_log(f"SQLITE_FULL_LOAD_TIME_S={time.perf_counter() - t_sql:.6f}")
     debug_log(f"CATALOGO_SQLITE={len(rows)}")
-    return [TileInfo(path=row[0], average_color=(row[1], row[2], row[3])) for row in rows]
+    return [
+        TileInfo(path=row[0], average_color=(row[1], row[2], row[3]), created_at=row[4] or "")
+        for row in rows
+    ]
 
 
 def _construir_buckets_por_cor(
@@ -236,13 +266,7 @@ def _db_fingerprint(index_db_path: str) -> Tuple[int, int]:
     return (stat.st_mtime_ns, stat.st_size)
 
 
-def _carregar_catalogo_descritores_cacheado(
-    categoria: str,
-) -> Tuple[List[Tuple[str, Tuple[int, int, int]]], bool]:
-    """
-    Retorna descritores (path + RGB médio) cacheados por categoria.
-    Recarrega do SQLite apenas quando o banco muda em disco.
-    """
+def _carregar_catalogo_descritores_cacheado() -> Tuple[List[Tuple[str, Tuple[int, int, int], str]], bool]:
     if not os.path.exists(INDEX_DB_PATH):
         raise ValueError(f"Banco de index não encontrado: {INDEX_DB_PATH}")
 
@@ -253,29 +277,24 @@ def _carregar_catalogo_descritores_cacheado(
             _CATALOGO_CACHE_BY_CATEGORY.clear()
             _CATALOGO_CACHE_DB_FINGERPRINT = db_fp
 
-        existente = _CATALOGO_CACHE_BY_CATEGORY.get(categoria)
+        existente = _CATALOGO_CACHE_BY_CATEGORY.get("acervo")
         if existente is not None:
             return existente, True
 
     with sqlite3.connect(INDEX_DB_PATH) as conn:
-        rows = conn.execute(
-            "SELECT path, r, g, b FROM tiles WHERE categoria = ?",
-            (categoria,),
-        ).fetchall()
-
-    descritores = [
-        (row[0], (int(row[1]), int(row[2]), int(row[3])))
-        for row in rows
-    ]
+        rows = conn.execute("SELECT path, r, g, b, created_at FROM tiles").fetchall()
+        descritores = [
+            (row[0], (int(row[1]), int(row[2]), int(row[3])), row[4] or "")
+            for row in rows
+        ]
 
     with _CATALOGO_CACHE_LOCK:
-        _CATALOGO_CACHE_BY_CATEGORY[categoria] = descritores
-
+        _CATALOGO_CACHE_BY_CATEGORY["acervo"] = descritores
     return descritores, False
 
 
 def _preaquecer_cache_tiles_renderizados(
-    descritores_catalogo: List[Tuple[str, Tuple[int, int, int]]],
+    descritores_catalogo: List[Tuple[str, Tuple[int, int, int], str]],
     tamanho_pixel: int,
 ) -> Tuple[int, float, bool]:
     """
@@ -292,7 +311,7 @@ def _preaquecer_cache_tiles_renderizados(
 
     inicio = time.perf_counter()
     novo_store: Dict[str, Image.Image] = {}
-    for path, _ in descritores_catalogo:
+    for path, _rgb, _created_at in descritores_catalogo:
         try:
             with Image.open(path) as img:
                 tile = img.convert("RGB")
@@ -394,32 +413,36 @@ def _é_vizinho_válido(
 ) -> bool:
     """
     Verifica se um tile pode ser usado na posição atual respeitando 8-vizinhos.
-    
-    Args:
-        linha_atual: Linha da célula atual
-        coluna_atual: Coluna da célula atual
-        tile_path: Caminho do tile a validar
-        ultimas_posicoes: Dict mapping path → (linha, coluna) da última posição usada
-    
-    Returns:
-        True se o tile é válido (não em 8-vizinhos), False caso contrário
     """
     if tile_path not in ultimas_posicoes:
-        # Primeira vez usando este tile, sempre válido
         return True
-    
+
     ultima_linha, ultima_coluna = ultimas_posicoes[tile_path]
-    
-    # Verificar se está em 8-vizinhos (distância Chebyshev <= 1)
     dist_linha = abs(linha_atual - ultima_linha)
     dist_coluna = abs(coluna_atual - ultima_coluna)
-    
-    # Se uma das distâncias for maior que 1, não é vizinho
+
     if dist_linha > 1 or dist_coluna > 1:
         return True
-    
-    # Qualquer coisa com max(dist) <= 1 é vizinho (L/R/U/D/diagonal)
+
     return False
+
+
+def _bonus_recencia(created_at_str: str) -> float:
+    """
+    Retorna bônus de desconto na distância de cor (0 a RECENCIA_BONUS_MAX).
+    Tiles inseridos nos últimos RECENCIA_JANELA_DIAS dias recebem bônus proporcional.
+    """
+    if not created_at_str:
+        return 0.0
+    try:
+        criado = datetime.fromisoformat(created_at_str)
+        idade_dias = (datetime.now() - criado).days
+        if idade_dias >= RECENCIA_JANELA_DIAS:
+            return 0.0
+        fator = 1.0 - (idade_dias / RECENCIA_JANELA_DIAS)
+        return RECENCIA_BONUS_MAX * fator
+    except Exception:
+        return 0.0
 
 
 def selecionar_pixel(
@@ -430,67 +453,62 @@ def selecionar_pixel(
     linha_atual: int,
     coluna_atual: int,
     cor_anterior: Tuple[int, int, int] = None,
-ultimas_posicoes: Optional[Dict[str, Tuple[int, int]]] = None,
+    ultimas_posicoes: Optional[Dict[str, Tuple[int, int]]] = None,
 ) -> TileInfo:
     """
-    Seleciona o melhor pixel para uma célula com restrições de 8-vizinhos.
-    
-    Args:
-        cor_alvo: Cor que queremos aproximar
-        pixels: Lista de pixels disponíveis
-        max_repeticoes: Máximo de vezes que um pixel pode ser usado
-        variacao_cor: Variação de cor (0-100), quanto maior mais flexível
-        linha_atual: Linha da célula sendo renderizada
-        coluna_atual: Coluna da célula sendo renderizada
-        cor_anterior: Cor do pixel anterior (para suavidade)
-        ultimas_posicoes: Dict com última posição usada por cada tile
-    
-    Returns:
-        O pixel mais adequado respeitando constraints
+    Seleciona o melhor tile para uma célula.
+    Respeita restrições de 8-vizinhos e max_repeticoes.
+    Entre os RECENCIA_TOP_N melhores candidatos por cor, privilegia tiles mais recentes.
     """
     ultimas_posicoes = ultimas_posicoes or {}
 
-    def _score(pixel: TileInfo) -> int:
-        return _distancia_cor_quadrada(cor_alvo, pixel.average_color)
+    def _score_recencia(pixel: TileInfo) -> float:
+        dist = _distancia_cor_quadrada(cor_alvo, pixel.average_color)
+        return dist - _bonus_recencia(pixel.created_at)
 
-    # Estratégia: Tentar candidatos que respeitam AMBAS restrições (8-vizinhos + max_uses)
-    candidatos_ambas_restricoes: List[TileInfo] = []
-    for pixel in pixels:
-        usos = pixel.uses
-        if max_repeticoes > 0 and usos >= max_repeticoes:
-            continue
-        if not _é_vizinho_válido(linha_atual, coluna_atual, pixel.path, ultimas_posicoes):
-            continue
-        candidatos_ambas_restricoes.append(pixel)
+    # Caso 1: respeita max_repeticoes e vizinhança
+    candidatos_ambas: List[TileInfo] = [
+        p for p in pixels
+        if (max_repeticoes <= 0 or p.uses < max_repeticoes)
+        and _é_vizinho_válido(linha_atual, coluna_atual, p.path, ultimas_posicoes)
+    ]
+    if candidatos_ambas:
+        top_n = nsmallest(
+            RECENCIA_TOP_N,
+            candidatos_ambas,
+            key=lambda p: _distancia_cor_quadrada(cor_alvo, p.average_color),
+        )
+        return min(top_n, key=_score_recencia)
 
-    if candidatos_ambas_restricoes:
-        return min(candidatos_ambas_restricoes, key=_score)
-
-    # Fallback 1: Relaxar 8-vizinhos, manter max_uses (se houver)
-    candidatos_max_uses_apenas: List[TileInfo] = []
-    for pixel in pixels:
-        usos = pixel.uses
-        if max_repeticoes > 0 and usos >= max_repeticoes:
-            continue
-        candidatos_max_uses_apenas.append(pixel)
-
-    if candidatos_max_uses_apenas:
+    # Caso 2: ignora vizinhança, respeita max_repeticoes
+    candidatos_max_uses: List[TileInfo] = [
+        p for p in pixels
+        if max_repeticoes <= 0 or p.uses < max_repeticoes
+    ]
+    if candidatos_max_uses:
         if DEBUG_VERBOSE_CELLS:
             debug_log(f"FALLBACK_8VIZ=True CELULA={linha_atual},{coluna_atual}")
-        return min(candidatos_max_uses_apenas, key=_score)
+        top_n = nsmallest(
+            RECENCIA_TOP_N,
+            candidatos_max_uses,
+            key=lambda p: _distancia_cor_quadrada(cor_alvo, p.average_color),
+        )
+        return min(top_n, key=_score_recencia)
 
-    # Fallback 2: Sem candidatos dentro de max_uses.
-    # Mantém o menor excesso possível (menor uso global) e, empatando, menor distância.
+    # Caso 3: ignora max_repeticoes (fallback total)
     if not pixels:
         raise RuntimeError("Nenhum pixel disponível!")
 
-    min_uso = min(pixel.uses for pixel in pixels)
-    menos_usados = [
-        pixel for pixel in pixels if pixel.uses == min_uso
-    ]
+    min_uso = min(p.uses for p in pixels)
+    menos_usados = [p for p in pixels if p.uses == min_uso]
     if DEBUG_VERBOSE_CELLS:
         debug_log(f"FALLBACK_MAX_USES=True CELULA={linha_atual},{coluna_atual}")
-    return min(menos_usados, key=_score)
+    top_n = nsmallest(
+        RECENCIA_TOP_N,
+        menos_usados,
+        key=lambda p: _distancia_cor_quadrada(cor_alvo, p.average_color),
+    )
+    return min(top_n, key=_score_recencia)
 
 
 def _iterar_faixas(total_linhas: int, linhas_por_faixa: int) -> List[Tuple[int, int]]:
@@ -529,7 +547,6 @@ def _renderizar_faixa(
     for linha in range(linha_inicio, linha_fim):
         for coluna in range(colunas):
             celula_atual = linha * colunas + coluna + 1
-            # Apenas barra de progresso no terminal
             if callback_progresso:
                 callback_progresso(celula_atual, total_celulas)
 
@@ -538,7 +555,7 @@ def _renderizar_faixa(
                 debug_log(f"CELULA={linha},{coluna}")
                 debug_log(f"COR_ALVO={cor_celula}")
 
-            t_selecao_inicio = time.perf_counter()
+            t_sel_ini = time.perf_counter()
 
             pixels_candidatos = None
             if cache_candidatos_por_cor is not None:
@@ -560,13 +577,7 @@ def _renderizar_faixa(
             if not pixels_candidatos:
                 raise ValueError("Nenhum candidato válido para montar o mosaico.")
 
-            if DEBUG_VERBOSE_CELLS and max_repeticoes > 0 and not any(pixel.uses < max_repeticoes for pixel in pixels_candidatos):
-                debug_log(
-                    f"FALLBACK_FORCADO_REPETICAO CELULA={linha},{coluna} "
-                    f"CANDIDATOS={len(pixels_candidatos)} LIMITE={max_repeticoes}"
-                )
-
-            pixel_selecionado = selecionar_pixel(
+            pixel_sel = selecionar_pixel(
                 cor_celula,
                 pixels_candidatos,
                 max_repeticoes,
@@ -578,22 +589,25 @@ def _renderizar_faixa(
             )
             if metricas_tempo is not None:
                 metricas_tempo["selecao_tiles_s"] = metricas_tempo.get("selecao_tiles_s", 0.0) + (
-                    time.perf_counter() - t_selecao_inicio
+                    time.perf_counter() - t_sel_ini
                 )
+
             if DEBUG_VERBOSE_CELLS:
-                debug_log(f"TILE_FINAL={pixel_selecionado.path}")
-            pixel_selecionado.uses += 1
-            # Atualizar última posição usada para este tile
-            ultimas_posicoes[pixel_selecionado.path] = (linha, coluna)
+                debug_log(f"TILE_FINAL={pixel_sel.path}")
+
+            pixel_sel.uses += 1
+            ultimas_posicoes[pixel_sel.path] = (linha, coluna)
             cor_anterior = cor_celula
+
             x_final = coluna * tamanho_final_pixel
             y_faixa = (linha - linha_inicio) * tamanho_final_pixel
-            t_composicao_inicio = time.perf_counter()
-            tile_render = _obter_tile_cacheado(pixel_selecionado.path, tamanho_final_pixel)
+
+            t_comp_ini = time.perf_counter()
+            tile_render = _obter_tile_cacheado(pixel_sel.path, tamanho_final_pixel)
             faixa_img.paste(tile_render, (x_final, y_faixa))
             if metricas_tempo is not None:
                 metricas_tempo["composicao_final_s"] = metricas_tempo.get("composicao_final_s", 0.0) + (
-                    time.perf_counter() - t_composicao_inicio
+                    time.perf_counter() - t_comp_ini
                 )
 
     return faixa_img, cor_anterior
@@ -637,7 +651,6 @@ def _mesclar_faixas_para_saida(
 
                 buffer_rgb.flush()
 
-                # frombuffer usa o arquivo mapeado sem criar canvas gigante em RAM.
                 imagem_final = Image.frombuffer(
                     "RGB",
                     (largura_final, altura_final),
@@ -648,7 +661,11 @@ def _mesclar_faixas_para_saida(
                     1,
                 )
                 try:
-                    imagem_final.save(caminho_saida, "JPEG", quality=qualidade)
+                    # [ALTERADO 2026-05] Salva em AVIF se o caminho de saída terminar com .avif
+                    if str(caminho_saida).lower().endswith('.avif'):
+                        imagem_final.save(caminho_saida, "AVIF", quality=80)
+                    else:
+                        imagem_final.save(caminho_saida, "JPEG", quality=qualidade)
                 finally:
                     imagem_final.close()
             finally:
@@ -660,47 +677,93 @@ def _mesclar_faixas_para_saida(
             pass
 
 
-class _MosaicMmapWriter:
-    """Escreve faixas RGB diretamente no frame final mapeado em disco."""
+class MosaicMmapWriter:
+    """
+    Escreve faixas RGB diretamente no frame final mapeado em disco.
+    """
 
-    def __init__(self, largura_final: int, altura_final: int):
-        self.largura_final = largura_final
-        self.altura_final = altura_final
-        self.bytes_por_linha = largura_final * 3
-        self.total_bytes = self.bytes_por_linha * altura_final
-        self._tmp_file = tempfile.NamedTemporaryFile(prefix="mosaic_frame_", suffix=".rgb", delete=False)
-        self._tmp_path = self._tmp_file.name
-        self._tmp_file.truncate(self.total_bytes)
-        self._tmp_file.close()
-        self._rgb_file = open(self._tmp_path, "r+b")
-        self._buffer = mmap.mmap(self._rgb_file.fileno(), self.total_bytes, access=mmap.ACCESS_WRITE)
+    def __init__(self, largurafinal: int, alturafinal: int):
+        self.largurafinal = largurafinal
+        self.alturafinal = alturafinal
+        self.bytesporlinha = largurafinal * 3
+        self.totalbytes = self.bytesporlinha * alturafinal
 
-    def write_strip(self, linha_inicio: int, faixa_img: Image.Image) -> None:
-        faixa_rgb = faixa_img if faixa_img.mode == "RGB" else faixa_img.convert("RGB")
+        self.tmpfile = tempfile.NamedTemporaryFile(
+            prefix="mosaicframe", suffix=".rgb", delete=False
+        )
+        self.tmppath = self.tmpfile.name
+        self.tmpfile.truncate(self.totalbytes)
+        self.tmpfile.close()
+
+        self.rgbfile = open(self.tmppath, "r+b")
+        self.buffer = mmap.mmap(self.rgbfile.fileno(), self.totalbytes, access=mmap.ACCESS_WRITE)
+
+    def writestrip(self, linhainicio: int, faixaimg: Image.Image) -> None:
+        faixargb = faixaimg if faixaimg.mode == "RGB" else faixaimg.convert("RGB")
         try:
-            if faixa_rgb.width != self.largura_final:
+            if faixargb.width != self.largurafinal:
                 raise ValueError(
-                    f"Largura da faixa inválida: esperado {self.largura_final}, obtido {faixa_rgb.width}."
+                    f"Largura da faixa inválida: esperado {self.largurafinal}, obtido {faixargb.width}."
                 )
 
-            faixa_bytes = faixa_rgb.tobytes()
-            faixa_altura = faixa_rgb.height
-            tamanho_esperado = faixa_altura * self.bytes_por_linha
-            if len(faixa_bytes) != tamanho_esperado:
-                raise ValueError("Tamanho de bytes da faixa incompatível com o layout RGB esperado.")
+            faixabytes = faixargb.tobytes()
+            faixaaltura = faixargb.height
+            tamanhoesperado = faixaaltura * self.bytesporlinha
 
-            offset = linha_inicio * self.bytes_por_linha
-            self._buffer[offset:offset + tamanho_esperado] = faixa_bytes
+            if len(faixabytes) != tamanhoesperado:
+                raise ValueError(
+                    "Tamanho de bytes da faixa incompatível com o layout RGB esperado."
+                )
+
+            offset = linhainicio * self.bytesporlinha
+            self.buffer[offset : offset + tamanhoesperado] = faixabytes
         finally:
-            if faixa_rgb is not faixa_img:
-                faixa_rgb.close()
+            if faixargb is not faixaimg:
+                faixargb.close()
 
-    def save_jpeg(self, caminho_saida: str, qualidade: int) -> None:
-        self._buffer.flush()
+    def save_image_avif(self, caminhosaida: str, qualidade: int = 30) -> None:
+        """
+        Salva o frame final em AVIF com a qualidade indicada.
+        """
+        self.buffer.flush()
+        imagemfinal = Image.frombuffer(
+            "RGB",
+            (self.largurafinal, self.alturafinal),
+            self.buffer,
+            "raw",
+            "RGB",
+            0,
+            1,
+        )
+        try:
+            # formato AVIF via pillow-avif-plugin
+            imagemfinal.save(caminhosaida, "AVIF", quality=qualidade)
+        finally:
+            imagemfinal.close()
+
+    def close(self) -> None:
+        try:
+            self.buffer.close()
+        finally:
+            self.rgbfile.close()
+        try:
+            os.remove(self.tmppath)
+        except FileNotFoundError:
+            pass
+
+
+class _MosaicMmapWriter(MosaicMmapWriter):
+    """Compatibilidade com a API legada usada em criar_mosaico."""
+
+    def write_strip(self, linha_inicio: int, faixa_img: Image.Image) -> None:
+        self.writestrip(linha_inicio, faixa_img)
+
+    def save_jpeg(self, caminho_saida: str, qualidade: int = 85) -> None:
+        self.buffer.flush()
         imagem_final = Image.frombuffer(
             "RGB",
-            (self.largura_final, self.altura_final),
-            self._buffer,
+            (self.largurafinal, self.alturafinal),
+            self.buffer,
             "raw",
             "RGB",
             0,
@@ -711,48 +774,35 @@ class _MosaicMmapWriter:
         finally:
             imagem_final.close()
 
-    def close(self) -> None:
-        try:
-            self._buffer.close()
-        finally:
-            self._rgb_file.close()
-            try:
-                os.remove(self._tmp_path)
-            except FileNotFoundError:
-                pass
-
 
 def criar_mosaico(
     caminho_base: str,
-    categoria: str,
     tamanho_pixel: int,
     redimensionar: bool,
     max_repeticoes: int,
     variacao_cor: int,
     caminho_saida: str,
     qualidade: int = 85,
-    callback_progresso = None,
+    callback_progresso=None,
     usar_bandas: bool = ENABLE_STRIP_RENDER,
     linhas_por_banda: int = STRIP_FLUSH_ROWS,
 ) -> Tuple[int, int]:
     """
     Cria um mosaico a partir de uma imagem base.
-    
+
     Args:
         caminho_base: Caminho da imagem base
-        categoria: Categoria de tiles no índice (ex: 'Informacao', 'Medicamentos', 'Geral')
-        tamanho_pixel: Tamanho dos pixels em pixels (ex: 50, 100, 200)
+        tamanho_pixel: Tamanho dos pixels em pixels (mantido por compatibilidade)
         redimensionar: Se True, redimensiona pixels para tamanho_pixel
         max_repeticoes: Máximo de repetições (0, 2, 4)
         variacao_cor: Variação de cor (0-100)
         caminho_saida: Onde salvar o arquivo final
         qualidade: Qualidade JPEG (1-100)
         callback_progresso: Função para reportar progresso
-    
+
     Returns:
         Tupla (largura_final, altura_final) do mosaico
     """
-    
     inicio_execucao = time.perf_counter()
     instante_execucao = datetime.now().isoformat(timespec="seconds")
 
@@ -772,12 +822,14 @@ def criar_mosaico(
     production_log(f"SQLITE_PREFILTER_LIMIT={SQLITE_PREFILTER_LIMIT}")
     production_log(f"MODO_BANDAS={usar_bandas}")
     production_log(f"LINHAS_POR_BANDA={linhas_por_banda}")
+    production_log(f"RECENCIA_BONUS_MAX={RECENCIA_BONUS_MAX}")
+    production_log(f"RECENCIA_TOP_N={RECENCIA_TOP_N}")
+    production_log(f"RECENCIA_JANELA_DIAS={RECENCIA_JANELA_DIAS}")
 
     nome_arquivo_base = os.path.basename(caminho_base)
     terminal_log("Arquivo detectado para processamento.", arquivo=nome_arquivo_base)
     terminal_log("Inicio do processamento do mosaico.", arquivo=nome_arquivo_base)
 
-    # Parâmetros efetivos de seleção
     variacao_cor_efetiva = max(0, min(100, int(variacao_cor)))
     max_repeticoes_efetivo = max(0, int(max_repeticoes))
 
@@ -786,7 +838,6 @@ def criar_mosaico(
     production_log(f"VARIACAO_COR_EFETIVA={variacao_cor_efetiva}")
     production_log(f"MAX_REPETICOES_EFETIVO={max_repeticoes_efetivo}")
 
-    # Leitura da imagem base e cálculo do grid em etapas separadas para auditoria.
     t_leitura_base = time.perf_counter()
     with Image.open(caminho_base) as img_base:
         img_base = img_base.convert("RGB")
@@ -815,16 +866,10 @@ def criar_mosaico(
         )
         raise ValueError("A imagem base deve ter no mínimo 1000 px de largura.")
 
-    # Regras fixas de composição
     colunas = FIXED_COLUMNS
-    linhas = FIXED_COLUMNS  # Quadrado fixo, não proporcional
+    linhas = FIXED_COLUMNS
     tamanho_final_pixel = FIXED_TILE_SIZE
-    
-    # Validar categoria
-    if not _validar_categoria_index(categoria):
-        terminal_log(f"Erro final no processamento: categoria '{categoria}' nao reconhecida.", level="ERROR", arquivo=nome_arquivo_base)
-        raise ValueError(f"Categoria '{categoria}' não é válida. Use: Informacao, Medicamentos, Pornografia, Geral")
-    
+
     ultimas_posicoes: Dict[str, Tuple[int, int]] = {}
     cache_candidatos_por_cor: Dict[Tuple[int, int, int], List[TileInfo]] = {}
 
@@ -835,26 +880,33 @@ def criar_mosaico(
 
     progresso_indexacao.update(1)
     try:
-        descritores_catalogo, cache_hit = _carregar_catalogo_descritores_cacheado(categoria)
+        descritores_catalogo, cache_hit = _carregar_catalogo_descritores_cacheado()
     except Exception as exc:
         progresso_indexacao.close()
-        terminal_log(f"Erro final no processamento: falha ao carregar acervo ({exc}).", level="ERROR", arquivo=nome_arquivo_base)
+        terminal_log(
+            f"Erro final no processamento: falha ao carregar acervo ({exc}).",
+            level="ERROR",
+            arquivo=nome_arquivo_base,
+        )
         raise
 
-    total_categoria = len(descritores_catalogo)
-    if total_categoria == 0:
+    total_tiles = len(descritores_catalogo)
+    if total_tiles == 0:
         progresso_indexacao.close()
-        terminal_log(f"Erro final no processamento: categoria '{categoria}' sem tiles no indice.", level="ERROR", arquivo=nome_arquivo_base)
-        raise ValueError(f"Categoria '{categoria}' sem tiles no index SQLite.")
+        terminal_log("Erro final no processamento: acervo sem tiles no indice.", level="ERROR", arquivo=nome_arquivo_base)
+        raise ValueError("Acervo sem tiles no index SQLite.")
 
-    debug_log(f"USANDO_INDEX=True CATEGORIA={categoria} TOTAL_CATEGORIA={total_categoria}")
+    debug_log(f"USANDO_INDEX=True TOTAL_TILES={total_tiles}")
     terminal_log(
-        f"Acervo carregado: categoria={categoria}, tiles={total_categoria}, cache={'hit' if cache_hit else 'miss'}.",
+        f"Acervo carregado: tiles={total_tiles}, cache={'hit' if cache_hit else 'miss'}.",
         arquivo=nome_arquivo_base,
     )
 
-    # Clona descritores em objetos mutáveis por job para preservar contador de usos local.
-    tiles_catalogo = [TileInfo(path=path, average_color=rgb) for path, rgb in descritores_catalogo]
+    tiles_catalogo = [
+        TileInfo(path=path, average_color=rgb, created_at=created_at)
+        for path, rgb, created_at in descritores_catalogo
+    ]
+
     if ENABLE_TILE_PRELOAD:
         qtd_preload, tempo_preload, preload_hit = _preaquecer_cache_tiles_renderizados(
             descritores_catalogo,
@@ -862,40 +914,43 @@ def criar_mosaico(
         )
     else:
         qtd_preload, tempo_preload, preload_hit = 0, 0.0, False
+
     progresso_indexacao.update(2)
     if not tiles_catalogo:
         progresso_indexacao.close()
         terminal_log(
-            f"Erro final no processamento: catalogo da categoria '{categoria}' sem tiles validos.",
+            "Erro final no processamento: acervo sem tiles validos.",
             level="ERROR",
             arquivo=nome_arquivo_base,
         )
-        raise ValueError(f"Categoria '{categoria}' sem tiles válidos no index SQLite.")
+        raise ValueError("Acervo sem tiles válidos no index SQLite.")
 
     buckets_por_cor = _construir_buckets_por_cor(tiles_catalogo)
     progresso_indexacao.update(3)
     progresso_indexacao.close()
+
     production_log(f"CATALOGO_TILES_RAM={len(tiles_catalogo)}")
     production_log(f"TOTAL_BUCKETS_RAM={len(buckets_por_cor)}")
     production_log(f"TILES_PRELOAD_RAM={qtd_preload}")
     production_log(f"TILES_PRELOAD_CACHE_HIT={preload_hit}")
     production_log(f"TEMPO_PRELOAD_TILES_S={tempo_preload:.3f}")
     production_log(f"TILES_PRELOAD_ENABLED={ENABLE_TILE_PRELOAD}")
+
     tempo_carregamento_acervo = time.perf_counter() - t_carregamento_acervo
     production_log(f"TEMPO_CARREGAR_ACERVO_S={tempo_carregamento_acervo:.3f}")
     terminal_log(f"Etapa carregamento_acervo: {tempo_carregamento_acervo:.2f}s.", arquivo=nome_arquivo_base)
     terminal_log("Carregamento do acervo concluido.", arquivo=nome_arquivo_base)
 
-    # Criar imagem final
     largura_final = colunas * tamanho_final_pixel
     altura_final = linhas * tamanho_final_pixel
-    
+
     cor_anterior = None
     metricas_tempo: Dict[str, float] = {
         "selecao_tiles_s": 0.0,
         "composicao_final_s": 0.0,
         "exportacao_jpeg_s": 0.0,
     }
+
     total_celulas = colunas * linhas
     terminal_log(f"Montagem iniciada. Total de celulas: {total_celulas}.", arquivo=nome_arquivo_base)
     t_montagem = time.perf_counter()
@@ -906,7 +961,7 @@ def criar_mosaico(
         progresso_montagem.update(celula_atual)
         if callback_progresso:
             callback_progresso(celula_atual, total)
-    
+
     try:
         if usar_bandas:
             linhas_por_banda = max(1, int(linhas_por_banda))
@@ -975,18 +1030,19 @@ def criar_mosaico(
                 faixa_img.close()
                 progresso_montagem.close()
                 terminal_log("Montagem concluida.", arquivo=nome_arquivo_base)
-                terminal_log("Inicio da gravacao final do mosaico.", arquivo=nome_arquivo_base)
+                terminal_log("Inicio da gravacao final do mosaico (AVIF).", arquivo=nome_arquivo_base)
                 t_export = time.perf_counter()
-                mosaico.save(caminho_saida, "JPEG", quality=qualidade)
-                metricas_tempo["exportacao_jpeg_s"] = time.perf_counter() - t_export
-                production_log(f"TEMPO_SALVAR_JPEG_S={metricas_tempo['exportacao_jpeg_s']:.3f}")
-                terminal_log("Exportacao concluida.", arquivo=nome_arquivo_base)
+                mosaico.save(caminho_saida, "AVIF", quality=30)
+                metricas_tempo["exportacao_avif_s"] = time.perf_counter() - t_export
+                production_log(f"TEMPO_SALVAR_AVIF_S={metricas_tempo['exportacao_avif_s']:.3f}")
+                terminal_log("Exportacao concluida (AVIF).", arquivo=nome_arquivo_base)
             finally:
                 mosaico.close()
     except Exception as exc:
         progresso_montagem.close()
         terminal_log(f"Erro final no processamento: {exc}", level="ERROR", arquivo=nome_arquivo_base)
         raise
+
     cache_info = _carregar_tile_renderizado.cache_info()
     production_log(
         f"TILE_LRU_CACHE hits={cache_info.hits} misses={cache_info.misses} "
@@ -1014,7 +1070,7 @@ def criar_mosaico(
         f"Sucesso final: mosaico salvo em {caminho_saida} ({largura_final}x{altura_final}) em {tempo_total:.2f}s.",
         arquivo=nome_arquivo_base,
     )
-    
+
     return largura_final, altura_final
 
 
@@ -1026,20 +1082,19 @@ def calcular_tamanho_final(
 ) -> Tuple[int, int, str]:
     """
     Calcula o tamanho final do mosaico sem criar a imagem.
-    
+
     Returns:
         Tupla (largura, altura, descricao)
     """
-    # Imagem base
     with Image.open(caminho_base) as img:
         largura_base = img.width
         altura_base = img.height
-    
+
     if largura_base < MIN_BASE_WIDTH:
         return 0, 0, "A imagem base deve ter no mínimo 1000 px de largura."
 
     colunas = FIXED_COLUMNS
-    linhas = FIXED_COLUMNS  # Quadrado fixo 1:1, conforme criar_mosaico
+    linhas = FIXED_COLUMNS
     largura_final = FIXED_OUTPUT_WIDTH
     altura_final = linhas * FIXED_TILE_SIZE
 
@@ -1048,5 +1103,5 @@ def calcular_tamanho_final(
         f"variação de cor {FIXED_COLOR_VARIATION}, repetição máxima {FIXED_MAX_REPETITIONS}. "
         f"Resultado: {largura_final}x{altura_final}px"
     )
-    
+
     return largura_final, altura_final, desc
