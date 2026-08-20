@@ -88,10 +88,33 @@
     .btn-save { background: #2d6a2d; color: #aeffae; }
     .btn-load { background: #2a2a5a; color: #aaaaff; }
     .slot-label { font-size: 10px; color: #666; text-align: center; margin-top: 2px; }
+
+    /* Flash de Câmera */
+    #camera-flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease-out;
+    }
+    #camera-flash.flash-active {
+      opacity: 1;
+      transition: none;
+    }
+    #camera-flash.flash-fade {
+      opacity: 0;
+      transition: opacity 2.5s cubic-bezier(0.1, 0.8, 0.3, 1);
+    }
   </style>
 </head>
 <body>
 <div id="stage-wrapper">
+  <div id="camera-flash"></div>
   <div id="status">Carregando galeria...</div>
 
   <!-- Barra de Carregamento -->
@@ -150,7 +173,6 @@
       <div class="section">
         <div class="section-title">Outras</div>
         <div class="row"><label>Espera img completa (ms)</label><input name="fullHoldMs" type="number" min="0" max="60000"></div>
-        <div class="row"><label>Intervalo Câmera (s)</label><input name="cameraInterval" type="number" min="5" max="3600"></div>
       </div>
 
       <div class="btn-row">
@@ -184,7 +206,7 @@
     zoomA: 3.5, zoomB: 4.5, zoomInMs: 1800, zoomHoldMs: 1200,
     panMs: 1400, panHoldMs: 800, panAmountX: 18, panAmountY: 10,
     panDirectionA: 'right-down', panDirectionB: 'left-up',
-    fullHoldMs: 900, zoomOutMs: 1200, cameraInterval: 60
+    fullHoldMs: 900, zoomOutMs: 1200
   };
 
   // Carrega última config usada (ou defaults)
@@ -265,24 +287,6 @@
     }
     // Salva automaticamente como "última usada"
     localStorage.setItem(STORAGE_KEY_LAST, JSON.stringify(settings));
-
-    // Envia o novo intervalo de segundos para o backend da câmera
-    if (settings.cameraInterval) {
-      try {
-        const res = await fetch('http://localhost:8081/config-camera', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ intervalSeconds: settings.cameraInterval })
-        });
-        if (res.ok) {
-          console.log('✓ Intervalo da câmera sincronizado no backend:', settings.cameraInterval);
-        } else {
-          console.error('Falha ao sincronizar intervalo da câmera no backend');
-        }
-      } catch (e) {
-        console.warn('Servidor backend offline; não pôde sincronizar intervalo da câmera:', e.message);
-      }
-    }
   }
 
   function salvarSlot(n) {
@@ -338,6 +342,27 @@
     startLoop();
   });
 
+  function triggerFlash() {
+    const flash = document.getElementById('camera-flash');
+    if (!flash) return;
+    flash.classList.remove('flash-fade');
+    flash.classList.add('flash-active');
+    flash.offsetHeight; // force reflow
+    setTimeout(() => {
+      flash.classList.remove('flash-active');
+      flash.classList.add('flash-fade');
+    }, 50);
+  }
+
+  async function setExhibitionStatus(isBusy) {
+    try {
+      const endpoint = isBusy ? '/busy' : '/idle';
+      await fetch('http://localhost:8081' + endpoint, { method: 'POST' });
+    } catch(e) {
+      console.warn('Erro ao atualizar status do mural:', e.message);
+    }
+  }
+
   function updateLoadingBar(isActive, jobId) {
     const container = document.getElementById('loading-bar-container');
     const fill = document.getElementById('loading-bar-fill');
@@ -347,6 +372,9 @@
       if (jobId !== activeJobId) {
         activeJobId = jobId;
         fill.style.width = '0%';
+        
+        // Disparar flash branco na tela
+        triggerFlash();
         
         // Limpar intervalo anterior se houver
         if (progressInterval) clearInterval(progressInterval);
@@ -426,8 +454,13 @@
           const targetItem = candidates[0];
           const targetIndex = manifest.findIndex(m => m.file === targetItem.file);
           if (targetIndex !== -1) {
-            await animarHero(targetIndex);
-            zoomedFiles.add(targetItem.file);
+            try {
+              await setExhibitionStatus(true);
+              await animarHero(targetIndex);
+            } finally {
+              zoomedFiles.add(targetItem.file);
+              await setExhibitionStatus(false);
+            }
           }
         } else {
           // Se não houver novos mosaicos na parede, apenas mostra o painel e aguarda pollar por novos

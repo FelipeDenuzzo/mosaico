@@ -11,7 +11,7 @@ const VALID_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
 const MAX_MOSAICS = 5;
 const PORT = 8081;
 
-let state = { mosaics: [], queue: [], seen: [] };
+let state = { mosaics: [], queue: [], seen: [], isBusy: false };
 
 function readCurrentManifest() {
   try {
@@ -20,10 +20,11 @@ function readCurrentManifest() {
     return {
       mosaics: Array.isArray(json.mosaics) ? json.mosaics : [],
       queue: Array.isArray(json.queue) ? json.queue : [],
-      seen: Array.isArray(json.seen) ? json.seen : []
+      seen: Array.isArray(json.seen) ? json.seen : [],
+      isBusy: typeof json.isBusy === 'boolean' ? json.isBusy : false
     };
   } catch (e) {
-    return { mosaics: [], queue: [], seen: [] };
+    return { mosaics: [], queue: [], seen: [], isBusy: false };
   }
 }
 
@@ -67,6 +68,7 @@ function syncWithFolder(isStartup = false) {
       state.seen.push(...state.queue.map(q => q.name));
     }
     state.queue = [];
+    state.isBusy = false; // Reset busy status on boot
   } else {
     state.queue = state.queue.filter(m => validFiles.has(m.name));
   }
@@ -174,6 +176,16 @@ const server = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, message: 'Fila vazia' }));
     }
+  } else if (req.method === 'POST' && req.url === '/busy') {
+    state.isBusy = true;
+    saveManifest();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, isBusy: true }));
+  } else if (req.method === 'POST' && req.url === '/idle') {
+    state.isBusy = false;
+    saveManifest();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, isBusy: false }));
   } else {
     res.writeHead(404);
     res.end();

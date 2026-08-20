@@ -8,15 +8,33 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INPUT_DIR = os.path.join(BASE_DIR, "input")
 CONFIG_PATH = os.path.join(BASE_DIR, "camera_config.json")
 
-def get_interval():
-    if os.path.exists(CONFIG_PATH):
+def is_camera_unlocked():
+    # Verificar manifest.json
+    manifest_path = os.path.join(BASE_DIR, "manifest.json")
+    if os.path.exists(manifest_path):
         try:
-            with open(CONFIG_PATH, "r") as f:
+            with open(manifest_path, "r") as f:
                 data = json.load(f)
-                return max(5, int(data.get("intervalSeconds", 60)))
+                is_busy = data.get("isBusy", False)
+                queue = data.get("queue", [])
+                if is_busy or len(queue) > 0:
+                    return False
         except Exception:
             pass
-    return 60
+
+    # Verificar jobs.json
+    jobs_path = os.path.join(BASE_DIR, "jobs.json")
+    if os.path.exists(jobs_path):
+        try:
+            with open(jobs_path, "r") as f:
+                jobs = json.load(f)
+                for job_id, job in jobs.items():
+                    if job.get("status") == "processando":
+                        return False
+        except Exception:
+            pass
+
+    return True
 
 def main():
     os.makedirs(INPUT_DIR, exist_ok=True)
@@ -32,19 +50,23 @@ def main():
 
     print("Câmera ativa. Entrando em loop de captura com sensor de movimento.")
     
-    last_capture_time = 0
     prev_gray = None
     motion_threshold = 0.015  # 1.5% de pixels alterados
     start_time = time.time()
     
     try:
         while True:
-            interval = get_interval()
             now = time.time()
             
             ret, frame = cap.read()
             if not ret:
                 time.sleep(0.1)
+                continue
+                
+            # Se a tela ou back-end estiverem ocupados, bloqueia novas fotos
+            if not is_camera_unlocked():
+                prev_gray = None
+                time.sleep(0.2)
                 continue
                 
             # Converter para tons de cinza e aplicar desfoque Gaussiano
@@ -72,8 +94,8 @@ def main():
             # Detecção de movimento com threshold
             motion_detected = motion_ratio > motion_threshold
             
-            # Disparar se houver movimento, pós-estabilização inicial de 3s e após o cooldown/intervalo
-            if motion_detected and (now - start_time > 3.0) and (now - last_capture_time >= interval):
+            # Disparar se houver movimento e pós-estabilização inicial de 3s
+            if motion_detected and (now - start_time > 3.0):
                 # Limpa frames antigos acumulados no buffer da webcam
                 for _ in range(5):
                     cap.grab()
@@ -87,8 +109,10 @@ def main():
                 
                 # Salva a imagem no formato JPEG com qualidade alta (95)
                 cv2.imwrite(filepath, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] Movimento detectado (ratio: {motion_ratio:.3f})! Foto salva em: {filepath} (cooldown: {interval}s)")
-                last_capture_time = now
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Movimento detectado (ratio: {motion_ratio:.3f})! Foto salva em: {filepath}")
+                
+                # Aguarda o watcher iniciar o processamento antes de checar a trava de novo
+                time.sleep(1.0)
             
             # Controle de taxa de quadros (aprox. 10 FPS)
             time.sleep(0.1)
