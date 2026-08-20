@@ -374,6 +374,9 @@ def executar_rotina() -> None:
     try:
         ensure_schema(conn)
 
+        print("\nLimpando registros órfãos (arquivos removidos)...")
+        remover_tiles_orfaos(conn)
+
         print("\nVerificando tiles temporarios (archive)...")
         temporarios = processar_pasta_temporaria(conn)
         if temporarios > 0:

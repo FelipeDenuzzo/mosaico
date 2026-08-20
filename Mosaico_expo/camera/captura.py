@@ -9,7 +9,16 @@ INPUT_DIR = os.path.join(BASE_DIR, "input")
 CONFIG_PATH = os.path.join(BASE_DIR, "camera_config.json")
 
 def is_camera_unlocked():
-    # Verificar manifest.json
+    # 1. Verificar se há arquivos na pasta input (evita race condition durante estabilização)
+    if os.path.exists(INPUT_DIR):
+        try:
+            files = [f for f in os.listdir(INPUT_DIR) if not f.startswith(".")]
+            if len(files) > 0:
+                return False
+        except Exception:
+            pass
+
+    # 2. Verificar manifest.json
     manifest_path = os.path.join(BASE_DIR, "manifest.json")
     if os.path.exists(manifest_path):
         try:
@@ -22,7 +31,7 @@ def is_camera_unlocked():
         except Exception:
             pass
 
-    # Verificar jobs.json
+    # 3. Verificar jobs.json
     jobs_path = os.path.join(BASE_DIR, "jobs.json")
     if os.path.exists(jobs_path):
         try:
