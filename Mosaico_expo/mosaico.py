@@ -398,11 +398,17 @@ def _buscar_candidatos_memoria(
 @lru_cache(maxsize=TILE_IMAGE_CACHE_MAXSIZE)
 def _carregar_tile_renderizado(path: str, tamanho_pixel: int) -> Image.Image:
     """Carrega tile físico sob demanda com cache LRU e tamanho final padronizado."""
-    with Image.open(path) as img:
-        tile = img.convert("RGB")
-        if tile.size != (tamanho_pixel, tamanho_pixel):
-            tile = tile.resize((tamanho_pixel, tamanho_pixel), Image.Resampling.LANCZOS)
-        return tile.copy()
+    try:
+        with Image.open(path) as img:
+            tile = img.convert("RGB")
+            if tile.size != (tamanho_pixel, tamanho_pixel):
+                tile = tile.resize((tamanho_pixel, tamanho_pixel), Image.Resampling.LANCZOS)
+            return tile.copy()
+    except Exception as e:
+        import logging
+        logging.error(f"[mosaico] Falha ao carregar tile {path}, usando fallback: {e}")
+        # Retorna um quadrado cinza como fallback para evitar crash da exposição
+        return Image.new("RGB", (tamanho_pixel, tamanho_pixel), (128, 128, 128))
 
 
 def _é_vizinho_válido(
