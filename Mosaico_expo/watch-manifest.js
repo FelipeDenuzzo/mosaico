@@ -111,6 +111,7 @@ function syncWithFolder(isStartup = false) {
   if (novos.length > 0) {
     state.queue.push(...novos);
     state.queue.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    state.isBusy = true;
   }
 
   while (state.mosaics.length < MAX_MOSAICS && state.queue.length > 0) {

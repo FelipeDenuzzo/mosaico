@@ -733,6 +733,16 @@ def process_image(src_path: str) -> None:
                 meta["output_path"] = internal_output_path
                 _write_json(meta_path, meta)
                 _move_without_overwrite(meta_path, os.path.join(ARCHIVE_DIR, meta_file_name))
+                
+                # Travar a câmera via watch-manifest antes de marcar o job como pronto
+                try:
+                    import urllib.request
+                    req = urllib.request.Request("http://localhost:8081/busy", method="POST")
+                    with urllib.request.urlopen(req, timeout=2) as response:
+                        response.read()
+                except Exception as e:
+                    logging.warning(f"Falha ao travar câmera via watch-manifest: {e}")
+
                 _update_job_status(
                     job_id,
                     "pronto",
