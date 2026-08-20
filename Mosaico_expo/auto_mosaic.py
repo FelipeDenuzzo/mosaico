@@ -823,6 +823,17 @@ def start_watcher() -> None:
     observer = Observer()
     observer.schedule(event_handler, INPUT_DIR, recursive=False)
     observer.start()
+
+    # Processar arquivos pré-existentes/residuais na inicialização
+    try:
+        for entry in os.scandir(INPUT_DIR):
+            if entry.is_file() and not entry.name.startswith("."):
+                if _eh_imagem_suportada(entry.path):
+                    logging.info(f"Processando arquivo residual encontrado no startup: {entry.name}")
+                    JOB_WORKER_POOL.submit(process_image, entry.path)
+    except Exception as e:
+        logging.error(f"Erro ao processar arquivos residuais no startup: {e}")
+
     try:
         while True:
             time.sleep(1)
