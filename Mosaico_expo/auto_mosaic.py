@@ -555,29 +555,18 @@ def reconcile_stuck_jobs() -> None:
     if not jobs:
         return
 
-    agora = datetime.now()
     alterou = False
 
     for job_id, job in jobs.items():
-        if job.get("status") != "processando":
-            continue
-
-        ts = job.get("timestamp_criacao")
-        try:
-            criado_em = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
-        except Exception:
-            continue
-
-        idade = (agora - criado_em).total_seconds()
-        if idade > STUCK_JOB_TTL_SECONDS:
+        if job.get("status") == "processando":
             job["status"] = "erro"
-            job["erro"] = "Job interrompido anteriormente e marcado como travado."
+            job["erro"] = "Job interrompido devido ao reinício do sistema."
             jobs[job_id] = job
             alterou = True
 
     if alterou:
         _save_jobs(jobs)
-        logging.info("[reconcile] Jobs travados foram marcados como erro.")
+        logging.info("[reconcile] Jobs travados no reinício foram marcados como erro.")
 
 
 def ensure_dirs() -> None:
