@@ -44,7 +44,7 @@ PROD_MINUTO = 30
 DB_NAME = "tiles_index.db"
 SUPPORTED_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tiff", ".tif",
-    ".heic", ".heif", ".hif", ".avif"  # iOS / Android HEIC/HEIF/AVIF
+    ".heic", ".heif", ".hif"  # iOS / Android HEIC/HEIF
 }
 BUCKET_DIVISOR = 16
 LOG_DETALHADO_INDEXACAO = True

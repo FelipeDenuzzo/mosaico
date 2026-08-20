@@ -759,8 +759,8 @@ def process_image(src_path: str) -> None:
 
                 indexar_tile_usuario(archive_input_path, nome_rastreado, job_id)
                 
-                # Integrar mosaico com indexador: copiar e gerar tile 100x100
-                integrar_mosaico_com_indexador(internal_output_path, job_id)
+                # Integrar mosaico com indexador: desativado por causar lentidão extrema ao decodificar AVIF gigante
+                # integrar_mosaico_com_indexador(internal_output_path, job_id)
 
             else:
                 if os.path.exists(processing_input_path):
