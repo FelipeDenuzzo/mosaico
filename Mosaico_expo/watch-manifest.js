@@ -117,6 +117,27 @@ function syncWithFolder(isStartup = false) {
     state.mosaics.push(state.queue.shift());
   }
 
+  // Manter no disco apenas os arquivos que estão ativos na parede (mosaics) ou na fila (queue)
+  const activeNames = new Set([
+    ...state.mosaics.map(m => m.name),
+    ...state.queue.map(m => m.name)
+  ]);
+
+  for (const name of validFiles.keys()) {
+    if (!activeNames.has(name)) {
+      const removePath = path.join(OUTPUT_DIR, name);
+      try {
+        if (fs.existsSync(removePath)) {
+          fs.unlinkSync(removePath);
+          validFiles.delete(name);
+          console.log(`[watch-manifest] Removido arquivo excedente do Output/: ${name}`);
+        }
+      } catch(e) {
+        console.warn(`[watch-manifest] Erro ao remover do Output/: ${name}:`, e.message);
+      }
+    }
+  }
+
   if (JSON.stringify(state) !== oldStateStr) {
     saveManifest();
   }
@@ -166,6 +187,17 @@ const server = http.createServer((req, res) => {
          const removed = state.mosaics.shift();
          if (!state.seen) state.seen = [];
          state.seen.push(removed.name);
+
+         // Deleta o arquivo físico rotacionado para manter somente os últimos 5
+         const removePath = path.join(OUTPUT_DIR, removed.name);
+         if (fs.existsSync(removePath)) {
+           try {
+             fs.unlinkSync(removePath);
+             console.log(`[watch-manifest] Mosaico antigo removido do disco: ${removed.name}`);
+           } catch(e) {
+             console.error(`[watch-manifest] Erro ao remover mosaico antigo:`, e.message);
+           }
+         }
       }
       state.mosaics.push(nextItem);
       saveManifest();
