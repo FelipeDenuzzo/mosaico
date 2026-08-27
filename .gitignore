@@ -22,4 +22,5 @@ camera_config.json
 jobs.json
 manifest.json
 tiles_index.db*
+job_counter.txt
 
