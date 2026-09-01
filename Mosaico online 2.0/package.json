@@ -1,0 +1,9 @@
+{
+  "name": "mosaico-expo",
+  "version": "1.0.0",
+  "description": "Servico de monitoramento do mural da exposicao",
+  "main": "watch-manifest.js",
+  "dependencies": {
+    "chokidar": "^5.0.0"
+  }
+}

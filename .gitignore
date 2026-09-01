@@ -21,6 +21,7 @@ tiles_index.db
 camera_config.json
 jobs.json
 manifest.json
-tiles_index.db*
+*.db
+*.db*
 job_counter.txt
 
