@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>mosaico-exibicao</title>
-  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+  <script src="./pixi.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
@@ -148,6 +148,7 @@
 
       <div class="section">
         <div class="section-title">Pan</div>
+        <div class="row"><label>Zoom no tile recente</label><input name="zoomRecent" type="checkbox"></div>
         <div class="row"><label>Desloc. X (%)</label><input name="panAmountX" type="number" min="-100" max="100"></div>
         <div class="row"><label>Desloc. Y (%)</label><input name="panAmountY" type="number" min="-100" max="100"></div>
         <div class="row"><label>Direção 1</label>
@@ -206,12 +207,11 @@
     zoomA: 3.5, zoomB: 4.5, zoomInMs: 1800, zoomHoldMs: 1200,
     panMs: 1400, panHoldMs: 800, panAmountX: 18, panAmountY: 10,
     panDirectionA: 'right-down', panDirectionB: 'left-up',
+    zoomRecent: true,
     fullHoldMs: 900, zoomOutMs: 1200
   };
 
-  // Carrega última config usada (ou defaults)
-  const saved = localStorage.getItem(STORAGE_KEY_LAST);
-  const settings = saved ? { ...defaults, ...JSON.parse(saved) } : { ...defaults };
+  let settings = { ...defaults };
 
   const MAX_MOSAICS = 5;
   let manifest = [], wallSprites = [], heroSprite = null;
@@ -274,7 +274,13 @@
   function preencherPainel() {
     const form = document.getElementById('panel-form');
     for (const k in settings) {
-      if (form[k]) form[k].value = settings[k];
+      if (form[k]) {
+        if (form[k].type === 'checkbox') {
+          form[k].checked = settings[k];
+        } else {
+          form[k].value = settings[k];
+        }
+      }
     }
   }
 
@@ -282,11 +288,26 @@
     const form = document.getElementById('panel-form');
     for (const k in settings) {
       if (form[k]) {
-        settings[k] = typeof defaults[k] === 'number' ? Number(form[k].value) : form[k].value;
+        if (form[k].type === 'checkbox') {
+          settings[k] = form[k].checked;
+        } else {
+          settings[k] = typeof defaults[k] === 'number' ? Number(form[k].value) : form[k].value;
+        }
       }
     }
-    // Salva automaticamente como "última usada"
+    // Salva automaticamente como "última usada" no localStorage (fallback)
     localStorage.setItem(STORAGE_KEY_LAST, JSON.stringify(settings));
+
+    // Tenta salvar no disco do servidor para sobreviver ao Kiosk
+    try {
+      await fetch('http://127.0.0.1:8081/config-exibicao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+    } catch(e) {
+      console.warn('Erro ao salvar no servidor', e);
+    }
   }
 
   function salvarSlot(n) {
@@ -315,6 +336,19 @@
   window.addEventListener('DOMContentLoaded', async () => {
     wrapper = document.getElementById('stage-wrapper');
     statusEl = document.getElementById('status');
+
+    try {
+      const res = await fetch('http://127.0.0.1:8081/config-exibicao');
+      if (res.ok) {
+        const data = await res.json();
+        settings = { ...defaults, ...data };
+      } else {
+        throw new Error('Fallback para localStorage');
+      }
+    } catch(e) {
+      const saved = localStorage.getItem(STORAGE_KEY_LAST);
+      if (saved) settings = { ...defaults, ...JSON.parse(saved) };
+    }
 
     app = new PIXI.Application({ resizeTo: wrapper, background: '#000', antialias: true });
     wrapper.appendChild(app.view);
@@ -357,7 +391,7 @@
   async function setExhibitionStatus(isBusy) {
     try {
       const endpoint = isBusy ? '/busy' : '/idle';
-      await fetch('http://localhost:8081' + endpoint, { method: 'POST' });
+      await fetch('http://127.0.0.1:8081' + endpoint, { method: 'POST' });
     } catch(e) {
       console.warn('Erro ao atualizar status do mural:', e.message);
     }
@@ -493,7 +527,7 @@
 
   async function verificarFila() {
     try {
-      const res = await fetch('http://localhost:8081/next', { method: 'POST' });
+      const res = await fetch('http://127.0.0.1:8081/next', { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -581,7 +615,7 @@
     await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomA), ms:settings.zoomInMs });
     if (interrupted) return;
     await wait(settings.zoomHoldMs); if (interrupted) return;
-    await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionA, settings.panMs);
+    await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionA, settings.panMs, item.recentX, item.recentY);
     if (interrupted) return;
     await wait(settings.panHoldMs); if (interrupted) return;
     const p1 = { x:heroSprite.x, y:heroSprite.y, w:heroSprite.width, h:heroSprite.height };
@@ -591,7 +625,7 @@
     await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomB), ms:settings.zoomInMs });
     if (interrupted) return;
     await wait(settings.zoomHoldMs); if (interrupted) return;
-    await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionB, settings.panMs);
+    await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionB, settings.panMs, item.recentX, item.recentY);
     if (interrupted) return;
     await wait(settings.panHoldMs); if (interrupted) return;
     const p2 = { x:heroSprite.x, y:heroSprite.y, w:heroSprite.width, h:heroSprite.height };
@@ -636,14 +670,22 @@
     return { x:(W-w)/2, y:(H-h)/2, w, h };
   }
 
-  function animarPan(sprite, amountX, amountY, direction, ms) {
-    let dx = (amountX/100)*wrapper.clientWidth;
-    let dy = (amountY/100)*wrapper.clientHeight;
-    switch(direction) {
-      case 'left-down':  dx=-Math.abs(dx); dy= Math.abs(dy); break;
-      case 'left-up':    dx=-Math.abs(dx); dy=-Math.abs(dy); break;
-      case 'right-down': dx= Math.abs(dx); dy= Math.abs(dy); break;
-      default:           dx= Math.abs(dx); dy=-Math.abs(dy); break;
+  function animarPan(sprite, amountX, amountY, direction, ms, targetX = null, targetY = null) {
+    let dx = 0, dy = 0;
+    if (settings.zoomRecent && targetX != null && targetY != null) {
+      const desiredX = (wrapper.clientWidth / 2) - (targetX/100) * sprite.width;
+      const desiredY = (wrapper.clientHeight / 2) - (targetY/100) * sprite.height;
+      dx = desiredX - sprite.x;
+      dy = desiredY - sprite.y;
+    } else {
+      dx = (amountX/100)*wrapper.clientWidth;
+      dy = (amountY/100)*wrapper.clientHeight;
+      switch(direction) {
+        case 'left-down':  dx=-Math.abs(dx); dy= Math.abs(dy); break;
+        case 'left-up':    dx=-Math.abs(dx); dy=-Math.abs(dy); break;
+        case 'right-down': dx= Math.abs(dx); dy= Math.abs(dy); break;
+        default:           dx= Math.abs(dx); dy=-Math.abs(dy); break;
+      }
     }
     const from = { x:sprite.x, y:sprite.y };
     return new Promise(resolve => {

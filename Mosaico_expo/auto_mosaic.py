@@ -55,15 +55,15 @@ USER_TILES_DIR = os.path.join(BASE_DIR, "acervo")
 # [ALTERADO 2026-05] TILE_BASE_SIZE dobrado para 60 (era 30) para melhorar projeção em parede
 # Tiles maiores = melhor qualidade visual na exibição.
 # ==========================================
-TILE_BASE_SIZE = 60          # tamanho mínimo (tiles do acervo padrão) [dobrado]
-TILE_MAX_SIZE = 300          # teto para evitar tiles gigantes
+TILE_BASE_SIZE = 150         # tamanho base elevado para alta qualidade (150px)
+TILE_MAX_SIZE = 400          # teto elevado para permitir tiles HD no acervo
 RESOLUCAO_REFERENCIA = 2000  # largura considerada "ideal" (fator 1.0)
 
 
 # ==========================================
 # CONFIGURAÇÕES DO MOSAICO
 # ==========================================
-TILE_SIZE = 100
+TILE_SIZE = 400
 MAX_USES = 2
 COLOR_VARIATION = 20
 MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MOSAICO_MAX_CONCURRENT_JOBS", "1")))
@@ -143,8 +143,8 @@ def _allocate_internal_names(original_filename: str) -> tuple[str, str, str, str
     nome_rastreado = _gerar_nome_rastreado(original_filename)
     job_id = nome_rastreado
     input_name = nome_rastreado + extensao
-    # Sempre salvar o mosaico final em AVIF, independente da extensão de entrada
-    output_name = nome_rastreado + ".avif"
+    # Sempre salvar o mosaico final em JPG para evitar problemas no Chrome
+    output_name = nome_rastreado + ".jpg"
 
     if os.path.exists(os.path.join(PROCESSING_DIR, input_name)) or \
        os.path.exists(os.path.join(OUTPUT_DIR, output_name)):
@@ -330,7 +330,7 @@ def integrar_mosaico_com_indexador(
     job_id: str,
 ) -> bool:
     """
-    Dispara o processamento do indexador para gerar tiles 100x100 do mosaico.
+    Dispara o processamento do indexador para gerar tiles 400x400 do mosaico.
     O mosaico permanece em Output/ e NÃO é duplicado no archive.
     
     Retorna True se bem-sucedido, False caso contrário.
@@ -349,7 +349,7 @@ def integrar_mosaico_com_indexador(
                     invalidar_cache_catalogo()
                     nome_mosaico = os.path.basename(caminho_mosaico)
                     logging.info(
-                        f"[{job_id}] Mosaico indexado e tile 100x100 gerado: {nome_mosaico}"
+                        f"[{job_id}] Mosaico indexado e tile 400x400 gerado: {nome_mosaico}"
                     )
                 else:
                     logging.warning(f"[{job_id}] Indexador não processou o mosaico.")
@@ -737,7 +737,7 @@ def process_image(src_path: str) -> None:
                 # Travar a câmera via watch-manifest antes de marcar o job como pronto
                 try:
                     import urllib.request
-                    req = urllib.request.Request("http://localhost:8081/busy", method="POST")
+                    req = urllib.request.Request("http://127.0.0.1:8081/busy", method="POST")
                     with urllib.request.urlopen(req, timeout=2) as response:
                         response.read()
                 except Exception as e:

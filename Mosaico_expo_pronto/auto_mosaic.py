@@ -737,7 +737,7 @@ def process_image(src_path: str) -> None:
                 # Travar a câmera via watch-manifest antes de marcar o job como pronto
                 try:
                     import urllib.request
-                    req = urllib.request.Request("http://localhost:8081/busy", method="POST")
+                    req = urllib.request.Request("http://127.0.0.1:8081/busy", method="POST")
                     with urllib.request.urlopen(req, timeout=2) as response:
                         response.read()
                 except Exception as e:

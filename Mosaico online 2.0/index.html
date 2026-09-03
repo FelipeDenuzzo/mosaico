@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mosaico Online 2.0</title>
-  <!-- Pixi.js v7 WebGL Render Engine -->
-  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
-  <!-- Google Fonts: Inter -->
+  <!-- Pixi.js v7 WebGL Render Engine (Local para funcionamento offline) -->
+  <script src="./pixi.min.js"></script>
+  <!-- Google Fonts: Inter (com fallback local se offline) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -18,7 +18,7 @@
       overflow: hidden;
       background: #0a0a0c;
       color: #f0f2f5;
-      font-family: 'Inter', sans-serif;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     }
 
     #app-container {
