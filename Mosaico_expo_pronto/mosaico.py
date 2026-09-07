@@ -22,7 +22,7 @@ from PIL import Image
 import pillow_avif  # registra suporte AVIF no Pillow
 
 
-FIXED_COLUMNS = 106
+FIXED_COLUMNS = 80
 FIXED_TILE_SIZE = 60
 FIXED_COLOR_VARIATION = 10
 FIXED_MAX_REPETITIONS = 1
@@ -48,7 +48,7 @@ SQLITE_PREFILTER_LIMIT = 180
 COLOR_BUCKET_SIZE = 16
 TILE_IMAGE_CACHE_MAXSIZE = max(5000, int(os.getenv("MOSAICO_TILE_CACHE_MAXSIZE", "15000")))
 STRIP_FLUSH_ROWS = max(1, int(os.getenv("MOSAICO_STRIP_ROWS", "20")))
-ENABLE_STRIP_RENDER = os.getenv("MOSAICO_STRIP_RENDER", "1") == "1"
+ENABLE_STRIP_RENDER = os.getenv("MOSAICO_STRIP_RENDER", "0") == "1"
 DEBUG_VERBOSE_CELLS = os.getenv("MOSAICO_DEBUG_VERBOSE_CELLS", "0") == "1"
 ENABLE_TILE_PRELOAD = os.getenv("MOSAICO_TILE_PRELOAD", "1") == "1"
 DEBUG_LOG_PATH = os.path.join(os.path.dirname(__file__), "debug_mosaico.log")
@@ -1096,8 +1096,8 @@ def criar_mosaico(
 
     if recent_tracker["col"] != -1 and recent_tracker["row"] != -1:
         try:
-            x_pct = (recent_tracker["col"] / colunas) * 100
-            y_pct = (recent_tracker["row"] / linhas) * 100
+            x_pct = ((recent_tracker["col"] + 0.5) / colunas) * 100
+            y_pct = ((recent_tracker["row"] + 0.5) / linhas) * 100
             json_path = str(caminho_saida) + ".json"
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump({"recent_x": x_pct, "recent_y": y_pct}, f)

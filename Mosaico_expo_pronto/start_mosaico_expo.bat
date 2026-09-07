@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo ==================================================
 echo Iniciando servicos Mosaico EXPO no Windows...
 echo ==================================================
@@ -35,7 +36,7 @@ start /min "Captura Camera" cmd /k ".venv\Scripts\activate && python -u camera/c
 :: 6) Abrir o navegador em modo Kiosk (Tela Cheia) após 5 segundos
 echo - Iniciando navegador em Tela Cheia (Edge)...
 ping -n 6 127.0.0.1 >nul
-start msedge --kiosk "http://127.0.0.1:8000/mosaico-exibicao.html" --edge-kiosk-type=fullscreen
+start msedge --kiosk "http://127.0.0.1:8000/mosaico-exibicao.html" --edge-kiosk-type=fullscreen --disable-features=CalculateNativeWinOcclusion
 
 echo ==================================================
 echo Todos os servicos foram iniciados em modo minimizado.

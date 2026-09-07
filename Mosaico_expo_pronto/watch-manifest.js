@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const chokidar = require('chokidar');
+let chokidar = null;
+try { chokidar = require('chokidar'); } catch(e) {}
 const http = require('http');
 
 const ROOT = path.resolve(__dirname);
@@ -147,6 +148,8 @@ function syncWithFolder(isStartup = false) {
       try {
         if (fs.existsSync(removePath)) {
           fs.unlinkSync(removePath);
+          const jsonRemove = removePath + '.json';
+          if (fs.existsSync(jsonRemove)) fs.unlinkSync(jsonRemove);
           validFiles.delete(name);
           console.log(`[watch-manifest] Removido arquivo excedente do Output/: ${name}`);
         }
@@ -245,6 +248,8 @@ const server = http.createServer((req, res) => {
          if (fs.existsSync(removePath)) {
            try {
              fs.unlinkSync(removePath);
+             const jsonRemove = removePath + '.json';
+             if (fs.existsSync(jsonRemove)) fs.unlinkSync(jsonRemove);
              console.log(`[watch-manifest] Mosaico antigo removido do disco: ${removed.name}`);
            } catch(e) {
              console.error(`[watch-manifest] Erro ao remover mosaico antigo:`, e.message);
@@ -282,14 +287,32 @@ server.listen(PORT, () => {
     console.log(`[watch-manifest] Endpoint de rotacao rodando na porta ${PORT}`);
 });
 
-const watcher = chokidar.watch(OUTPUT_DIR, { persistent: true, ignoreInitial: true, depth: 0 });
-watcher
-  .on('add', (filePath) => {
-    console.log('[watch-manifest] Novo mosaico detectado:', path.basename(filePath));
-    syncWithFolder();
-  })
-  .on('unlink', (filePath) => {
-    console.log('[watch-manifest] Mosaico removido:', path.basename(filePath));
-    syncWithFolder();
-  })
-  .on('error', (e) => console.error('[watch-manifest] Erro watcher:', e));
+if (chokidar) {
+  const watcher = chokidar.watch(OUTPUT_DIR, { persistent: true, ignoreInitial: true, depth: 0 });
+  watcher
+    .on('add', (filePath) => {
+      console.log('[watch-manifest] Novo mosaico detectado:', path.basename(filePath));
+      syncWithFolder();
+    })
+    .on('unlink', (filePath) => {
+      console.log('[watch-manifest] Mosaico removido:', path.basename(filePath));
+      syncWithFolder();
+    })
+    .on('error', (e) => console.error('[watch-manifest] Erro watcher:', e));
+  console.log('[watch-manifest] Monitorando Output/ com chokidar.');
+} else {
+  console.log('[watch-manifest] chokidar nao encontrado; usando fs.watch nativo do Node.');
+  if (fs.existsSync(OUTPUT_DIR)) {
+    let debounceTimer = null;
+    fs.watch(OUTPUT_DIR, (eventType, filename) => {
+      if (!filename) return;
+      const ext = path.extname(filename).toLowerCase();
+      if (!VALID_EXT.has(ext)) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        console.log(`[watch-manifest] Atualizacao detectada em Output/: ${filename}`);
+        syncWithFolder();
+      }, 500);
+    });
+  }
+}

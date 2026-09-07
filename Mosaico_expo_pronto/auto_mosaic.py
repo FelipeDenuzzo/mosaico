@@ -14,8 +14,14 @@ from datetime import datetime
 import importlib
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    HAS_WATCHDOG = True
+except ImportError:
+    HAS_WATCHDOG = False
+    Observer = None
+    FileSystemEventHandler = object
 from PIL import Image
 import pillow_avif  # registra AVIF no Pillow
 import pillow_heif  # registra HEIC/HEIF no Pillow
@@ -713,8 +719,7 @@ def process_image(src_path: str) -> None:
                 max_repeticoes=MAX_USES,
                 variacao_cor=COLOR_VARIATION,
                 caminho_saida=processing_output_path,
-                usar_bandas=True,
-                linhas_por_banda=5,
+                usar_bandas=False,
             )
             sucesso = True
             tempo_mosaico = time.perf_counter() - t_mosaico
@@ -729,6 +734,10 @@ def process_image(src_path: str) -> None:
         try:
             if sucesso:
                 _move_without_overwrite(processing_output_path, internal_output_path)
+                processing_output_json = processing_output_path + ".json"
+                internal_output_json = internal_output_path + ".json"
+                if os.path.exists(processing_output_json):
+                    _move_without_overwrite(processing_output_json, internal_output_json)
                 meta["status"] = "sucesso"
                 meta["output_path"] = internal_output_path
                 _write_json(meta_path, meta)
@@ -815,13 +824,20 @@ def start_watcher() -> None:
     logging.info(f"Tmp jobs -> {JOBS_TMP_DIR} (TTL {JOB_TMP_TTL_HOURS}h)")
     logging.info(f"Workers simultâneos -> {MAX_CONCURRENT_JOBS}")
     logging.info(f"Acervo user tiles -> {USER_TILES_DIR}")
+    logging.info(f"Modo de monitoramento: {'watchdog' if HAS_WATCHDOG else 'polling nativo (1s)'}")
     logging.info("Aguardando imagens...")
     logging.info("=" * 50)
 
-    event_handler = InputFolderHandler()
-    observer = Observer()
-    observer.schedule(event_handler, INPUT_DIR, recursive=False)
-    observer.start()
+    observer = None
+    if HAS_WATCHDOG and Observer is not None:
+        try:
+            event_handler = InputFolderHandler()
+            observer = Observer()
+            observer.schedule(event_handler, INPUT_DIR, recursive=False)
+            observer.start()
+        except Exception as e:
+            logging.error(f"Erro ao inicializar watchdog observer ({e}); usando polling nativo.")
+            observer = None
 
     # Processar arquivos pré-existentes/residuais na inicialização
     try:
@@ -835,11 +851,22 @@ def start_watcher() -> None:
 
     try:
         while True:
+            # Se watchdog não estiver ativo, varre a pasta a cada segundo
+            if observer is None:
+                try:
+                    for entry in os.scandir(INPUT_DIR):
+                        if entry.is_file() and not entry.name.startswith("."):
+                            if _eh_imagem_suportada(entry.path):
+                                JOB_WORKER_POOL.submit(process_image, entry.path)
+                except Exception as e:
+                    logging.error(f"Erro na varredura de arquivos no input: {e}")
             time.sleep(1)
     except KeyboardInterrupt:
         logging.info("Watcher interrompido (Ctrl+C).")
-        observer.stop()
-    observer.join()
+        if observer is not None:
+            observer.stop()
+    if observer is not None:
+        observer.join()
     if JOB_WORKER_POOL is not None:
         JOB_WORKER_POOL.shutdown(wait=True, cancel_futures=False)
         JOB_WORKER_POOL = None

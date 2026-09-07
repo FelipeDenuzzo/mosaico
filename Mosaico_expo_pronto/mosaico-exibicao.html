@@ -18,12 +18,11 @@
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%) translateY(20px);
-      background: rgba(20, 20, 20, 0.85);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(18, 18, 18, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       padding: 14px 20px;
       border-radius: 12px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
       z-index: 99;
       width: min(400px, 90vw);
       opacity: 0;
@@ -174,6 +173,8 @@
       <div class="section">
         <div class="section-title">Outras</div>
         <div class="row"><label>Espera img completa (ms)</label><input name="fullHoldMs" type="number" min="0" max="60000"></div>
+        <div class="row"><label>Inatividade p/ Galeria (min)</label><input name="idleTimeoutMin" type="number" min="1" max="120"></div>
+        <div class="row"><label>Espera no mural (s)</label><input name="idleCheckIntervalSec" type="number" min="1" max="60"></div>
       </div>
 
       <div class="btn-row">
@@ -208,7 +209,9 @@
     panMs: 1400, panHoldMs: 800, panAmountX: 18, panAmountY: 10,
     panDirectionA: 'right-down', panDirectionB: 'left-up',
     zoomRecent: true,
-    fullHoldMs: 900, zoomOutMs: 1200
+    fullHoldMs: 900, zoomOutMs: 1200,
+    idleTimeoutMin: 30,
+    idleCheckIntervalSec: 10
   };
 
   let settings = { ...defaults };
@@ -225,15 +228,49 @@
   const zoomedFiles = new Set();
   let isInitialLoad = true;
 
+  // Lógica de inatividade e modo galeria
+  let lastActivityTimestamp = Date.now();
+  let idleGalleryCurrentIndex = null;
+
   // Lógica de monitoramento de jobs / barra de carregamento
   let activeJobId = null;
   let progressInterval = null;
 
   async function getTexture(path) {
     if (textureCache.has(path)) return textureCache.get(path);
-    const t = await PIXI.Assets.load(path);
-    textureCache.set(path, t);
-    return t;
+    
+    // Obter limite máximo seguro da GPU (padrão até 8192px)
+    let maxGpu = 8192;
+    try {
+      if (app && app.renderer && app.renderer.gl) {
+        const hwLimit = app.renderer.gl.getParameter(app.renderer.gl.MAX_TEXTURE_SIZE);
+        if (hwLimit && hwLimit > 0) maxGpu = Math.min(hwLimit, 8192);
+      }
+    } catch(e) {}
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+      img.src = path;
+    });
+
+    let tex;
+    if (img.naturalWidth > maxGpu || img.naturalHeight > maxGpu) {
+      const scale = Math.min(maxGpu / img.naturalWidth, maxGpu / img.naturalHeight);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      tex = PIXI.Texture.from(canvas);
+    } else {
+      tex = PIXI.Texture.from(img);
+    }
+
+    textureCache.set(path, tex);
+    return tex;
   }
 
   function setStatus(text) { if (statusEl) statusEl.textContent = text; }
@@ -350,7 +387,13 @@
       if (saved) settings = { ...defaults, ...JSON.parse(saved) };
     }
 
-    app = new PIXI.Application({ resizeTo: wrapper, background: '#000', antialias: true });
+    app = new PIXI.Application({
+      resizeTo: wrapper,
+      background: '#000',
+      antialias: false,
+      clearBeforeRender: true,
+      powerPreference: 'high-performance'
+    });
     wrapper.appendChild(app.view);
 
     wallLayer = new PIXI.Container();
@@ -449,6 +492,7 @@
         for (const id in jobs) {
           if (jobs[id].status === 'processando') {
             processingJobId = id;
+            lastActivityTimestamp = Date.now();
             break;
           }
         }
@@ -492,6 +536,10 @@
         const candidates = manifest.filter(m => !preExistingFiles.has(m.file) && !zoomedFiles.has(m.file));
         
         if (candidates.length > 0) {
+          // Houve atividade recente (novo mosaico gerado)!
+          lastActivityTimestamp = Date.now();
+          idleGalleryCurrentIndex = null; // reseta o cursor da galeria de inatividade
+
           // Dar zoom no candidato mais recente (menor índice no manifest ordenado de forma decrescente)
           const targetItem = candidates[0];
           const targetIndex = manifest.findIndex(m => m.file === targetItem.file);
@@ -502,11 +550,62 @@
             } finally {
               zoomedFiles.add(targetItem.file);
               await setExhibitionStatus(false);
+              lastActivityTimestamp = Date.now(); // atualiza após terminar a exibição
             }
           }
         } else {
-          // Se não houver novos mosaicos na parede, apenas mostra o painel e aguarda pollar por novos
-          await wait(2000);
+          // Nenhum mosaico novo. Checar se atingiu o tempo de inatividade (padrão 30 min)
+          const idleThresholdMs = Math.max(1, (settings.idleTimeoutMin || 30)) * 60 * 1000;
+          const tempoInativo = Date.now() - lastActivityTimestamp;
+
+          if (tempoInativo >= idleThresholdMs && manifest.length > 0) {
+            // MODO GALERIA POR INATIVIDADE:
+            // Percorrer do mais antigo (último do array ordenado decrescente) para o mais recente (índice 0)
+            if (idleGalleryCurrentIndex === null || idleGalleryCurrentIndex < 0 || idleGalleryCurrentIndex >= manifest.length) {
+              idleGalleryCurrentIndex = manifest.length - 1; // Começa pelo mais antigo
+            }
+
+            const targetIndex = idleGalleryCurrentIndex;
+            const targetItem = manifest[targetIndex];
+            console.log(`[Modo Galeria] Inatividade detectada (${Math.round(tempoInativo/1000/60)} min). Exibindo mosaico mais antigo [${targetIndex + 1}/${manifest.length}]: ${targetItem.file}`);
+
+            try {
+              // 1. Bloqueia câmera durante a animação de zoom do mosaico antigo
+              await setExhibitionStatus(true);
+              await animarHero(targetIndex);
+            } finally {
+              // 2. Garante que volta ao mural e libera a câmera para o visitante
+              await setExhibitionStatus(false);
+              await mostrarParede();
+              
+              // Prepara o próximo para a rodada seguinte (avança em direção ao mais recente)
+              idleGalleryCurrentIndex--;
+              if (idleGalleryCurrentIndex < 0) {
+                idleGalleryCurrentIndex = manifest.length - 1; // reinicia o ciclo dos antigos
+              }
+            }
+
+            if (interrupted) continue;
+
+            // 3. Pausa de espera no mural completo (padrão 10 segundos) com a câmera destravada
+            const idleWaitSec = Math.max(1, settings.idleCheckIntervalSec || 10);
+            console.log(`[Modo Galeria] Aguardando ${idleWaitSec}s no mural para detectar novo visitante...`);
+            
+            // Aguarda os 10s em pequenos passos checando se entrou algum novo job
+            const waitEnd = Date.now() + (idleWaitSec * 1000);
+            while (Date.now() < waitEnd && !interrupted) {
+              if (activeJobId) {
+                // Visitante detectado! Sai do modo galeria imediatamente
+                lastActivityTimestamp = Date.now();
+                idleGalleryCurrentIndex = null;
+                break;
+              }
+              await wait(300);
+            }
+          } else {
+            // Ainda dentro da janela normal de espera por novo visitante
+            await wait(1500);
+          }
         }
         
         if (interrupted) continue;
@@ -612,7 +711,7 @@
     await animar({ from:{...orig}, to:getFullFit(heroSprite), ms:settings.wallZoomMs });
     if (interrupted) return;
     await wait(settings.fullHoldMs); if (interrupted) return;
-    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomA), ms:settings.zoomInMs });
+    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomA, item.recentX, item.recentY), ms:settings.zoomInMs });
     if (interrupted) return;
     await wait(settings.zoomHoldMs); if (interrupted) return;
     await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionA, settings.panMs, item.recentX, item.recentY);
@@ -622,7 +721,7 @@
     await animar({ from:p1, to:getFullFit(heroSprite), ms:settings.zoomOutMs });
     if (interrupted) return;
     await wait(settings.fullHoldMs); if (interrupted) return;
-    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomB), ms:settings.zoomInMs });
+    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomB, item.recentX, item.recentY), ms:settings.zoomInMs });
     if (interrupted) return;
     await wait(settings.zoomHoldMs); if (interrupted) return;
     await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionB, settings.panMs, item.recentX, item.recentY);
@@ -662,12 +761,18 @@
     return { x:(W-w)/2, y:(H-h)/2, w, h };
   }
 
-  function getZoomFit(sprite, zoom) {
+  function getZoomFit(sprite, zoom, targetX = null, targetY = null) {
     const W = wrapper.clientWidth, H = wrapper.clientHeight;
     const iw = sprite.texture.width, ih = sprite.texture.height;
     const scale = Math.min(W/iw, H/ih) * zoom;
     const w = iw*scale, h = ih*scale;
-    return { x:(W-w)/2, y:(H-h)/2, w, h };
+    let x = (W-w)/2;
+    let y = (H-h)/2;
+    if (settings.zoomRecent && targetX != null && targetY != null) {
+      x = (W / 2) - (targetX / 100) * w;
+      y = (H / 2) - (targetY / 100) * h;
+    }
+    return { x, y, w, h };
   }
 
   function animarPan(sprite, amountX, amountY, direction, ms, targetX = null, targetY = null) {
