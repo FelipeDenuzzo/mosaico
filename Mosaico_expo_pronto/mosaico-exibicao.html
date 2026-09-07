@@ -68,16 +68,37 @@
     #panel {
       display: none; position: absolute; top: 10px; right: 10px; z-index: 100;
       background: #1a1a1a; color: #eee; border-radius: 8px;
-      padding: 12px 14px; width: 300px;
+      padding: 12px 14px; width: 315px;
+      max-height: calc(100vh - 20px);
+      overflow-y: auto;
+      overflow-x: hidden;
       box-shadow: 0 2px 16px #0009; font-size: 12px;
+      box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: #555 #1a1a1a;
+    }
+    #panel::-webkit-scrollbar {
+      width: 6px;
+    }
+    #panel::-webkit-scrollbar-track {
+      background: #1a1a1a;
+      border-radius: 4px;
+    }
+    #panel::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 4px;
+    }
+    #panel::-webkit-scrollbar-thumb:hover {
+      background: #777;
     }
     #panel summary { cursor: pointer; font-weight: bold; font-size: 13px; margin-bottom: 10px; }
     .section { border: 1px solid #444; border-radius: 4px; padding: 8px 10px; margin-bottom: 8px; }
     .section-title { font-size: 10px; color: #888; font-weight: bold; margin-bottom: 6px; text-transform: uppercase; }
-    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; gap: 4px; }
+    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; gap: 4px; }
     .row label { flex: 1; color: #bbb; font-size: 11px; }
     .row input, .row select { width: 72px; background: #2a2a2a; border: 1px solid #555; color: #eee; border-radius: 3px; padding: 2px 4px; font-size: 11px; }
-    .row select { width: 110px; }
+    .row select { width: 115px; }
+    .control-desc { font-size: 9.5px; color: #8fa0b3; line-height: 1.25; margin-top: 1px; margin-bottom: 6px; }
     .btn-row { display: flex; gap: 6px; margin-top: 10px; }
     .btn-row button { flex: 1; padding: 6px 4px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
     #apply-btn  { background: #4a9eff; color: #fff; }
@@ -131,25 +152,44 @@
       <div class="section">
         <div class="section-title">Parede</div>
         <div class="row"><label>Colunas</label><input name="wallColumns" type="number" min="1" max="20"></div>
+        <div class="control-desc">Número de colunas de mosaicos na grade do mural</div>
         <div class="row"><label>Espaço (%)</label><input name="wallGap" type="number" min="0" max="20"></div>
+        <div class="control-desc">Espaçamento percentual entre os mosaicos no mural</div>
         <div class="row"><label>Espera (ms)</label><input name="wallHoldMs" type="number" min="0" max="60000"></div>
+        <div class="control-desc">Tempo de exibição do mural antes de focar em um mosaico</div>
         <div class="row"><label>Anim entrada/saída (ms)</label><input name="wallZoomMs" type="number" min="100" max="60000"></div>
+        <div class="control-desc">Duração do zoom entre o mural e o mosaico em tela cheia</div>
       </div>
 
       <div class="section">
         <div class="section-title">Zoom</div>
-        <div class="row"><label>1º zoom força</label><input name="zoomA" type="number" step="0.1" min="1" max="20"></div>
-        <div class="row"><label>2º zoom força</label><input name="zoomB" type="number" step="0.1" min="1" max="20"></div>
+        <div class="row"><label>Qtd. de Zooms</label>
+          <select name="zoomCount">
+            <option value="2">2 Zooms (Completo)</option>
+            <option value="1">1 Zoom (Ágil/Dinâmico)</option>
+          </select>
+        </div>
+        <div class="control-desc">Alterna entre 1 zoom rápido ou 2 zooms seguidos</div>
+        <div class="row"><label>1º zoom força</label><input name="zoomA" type="number" step="0.1" min="1" max="50"></div>
+        <div class="control-desc">Nível de aproximação do 1º zoom (ex: 3.5x a 22x)</div>
+        <div class="row"><label>2º zoom força</label><input name="zoomB" type="number" step="0.1" min="1" max="50"></div>
+        <div class="control-desc">Nível de aproximação do 2º zoom (quando ativo)</div>
         <div class="row"><label>Duração (ms)</label><input name="zoomInMs" type="number" min="100" max="60000"></div>
+        <div class="control-desc">Tempo que leva para aproximar a câmera na imagem</div>
         <div class="row"><label>Pausa zoom (ms)</label><input name="zoomHoldMs" type="number" min="0" max="60000"></div>
+        <div class="control-desc">Tempo estático no zoom antes de iniciar o deslocamento</div>
         <div class="row"><label>Afastamento (ms)</label><input name="zoomOutMs" type="number" min="100" max="60000"></div>
+        <div class="control-desc">Tempo de recuo voltando da aproximação à imagem cheia</div>
       </div>
 
       <div class="section">
         <div class="section-title">Pan</div>
         <div class="row"><label>Zoom no tile recente</label><input name="zoomRecent" type="checkbox"></div>
+        <div class="control-desc">Foca diretamente na última foto capturada da pessoa</div>
         <div class="row"><label>Desloc. X (%)</label><input name="panAmountX" type="number" min="-100" max="100"></div>
+        <div class="control-desc">Distância percentual de movimento horizontal no pan</div>
         <div class="row"><label>Desloc. Y (%)</label><input name="panAmountY" type="number" min="-100" max="100"></div>
+        <div class="control-desc">Distância percentual de movimento vertical no pan</div>
         <div class="row"><label>Direção 1</label>
           <select name="panDirectionA">
             <option value="left-down">↙ Esq-Baixo</option>
@@ -158,6 +198,7 @@
             <option value="right-up">↗ Dir-Cima</option>
           </select>
         </div>
+        <div class="control-desc">Trajetória do movimento de pan durante o 1º zoom</div>
         <div class="row"><label>Direção 2</label>
           <select name="panDirectionB">
             <option value="left-down">↙ Esq-Baixo</option>
@@ -166,15 +207,21 @@
             <option value="right-up">↗ Dir-Cima</option>
           </select>
         </div>
+        <div class="control-desc">Trajetória do movimento de pan durante o 2º zoom</div>
         <div class="row"><label>Duração (ms)</label><input name="panMs" type="number" min="100" max="60000"></div>
+        <div class="control-desc">Tempo de duração do deslocamento suave da câmera</div>
         <div class="row"><label>Pausa após pan (ms)</label><input name="panHoldMs" type="number" min="0" max="60000"></div>
+        <div class="control-desc">Tempo de pausa após o pan antes de afastar a câmera</div>
       </div>
 
       <div class="section">
         <div class="section-title">Outras</div>
         <div class="row"><label>Espera img completa (ms)</label><input name="fullHoldMs" type="number" min="0" max="60000"></div>
+        <div class="control-desc">Tempo de exibição do mosaico inteiro antes/depois do zoom</div>
         <div class="row"><label>Inatividade p/ Galeria (min)</label><input name="idleTimeoutMin" type="number" min="1" max="120"></div>
+        <div class="control-desc">Minutos sem novas fotos para iniciar rotação da galeria</div>
         <div class="row"><label>Espera no mural (s)</label><input name="idleCheckIntervalSec" type="number" min="1" max="60"></div>
+        <div class="control-desc">Intervalo de checagem no mural por novas fotos geradas</div>
       </div>
 
       <div class="btn-row">
@@ -205,6 +252,7 @@
 
   const defaults = {
     wallColumns: 5, wallGap: 2, wallHoldMs: 8000, wallZoomMs: 1200,
+    zoomCount: 2,
     zoomA: 3.5, zoomB: 4.5, zoomInMs: 1800, zoomHoldMs: 1200,
     panMs: 1400, panHoldMs: 800, panAmountX: 18, panAmountY: 10,
     panDirectionA: 'right-down', panDirectionB: 'left-up',
@@ -718,10 +766,21 @@
     if (interrupted) return;
     await wait(settings.panHoldMs); if (interrupted) return;
     const p1 = { x:heroSprite.x, y:heroSprite.y, w:heroSprite.width, h:heroSprite.height };
-    await animar({ from:p1, to:getFullFit(heroSprite), ms:settings.zoomOutMs });
+    const full1 = getFullFit(heroSprite);
+    await animar({ from:p1, to:full1, ms:settings.zoomOutMs });
     if (interrupted) return;
     await wait(settings.fullHoldMs); if (interrupted) return;
-    await animar({ from:getFullFit(heroSprite), to:getZoomFit(heroSprite, settings.zoomB, item.recentX, item.recentY), ms:settings.zoomInMs });
+
+    const qtdZooms = Number(settings.zoomCount) || 2;
+    if (qtdZooms === 1) {
+      await animar({ from:full1, to:{x:wallSprite.x, y:wallSprite.y, w:wallSprite.width, h:wallSprite.height}, ms:settings.wallZoomMs });
+      if (interrupted) return;
+      heroLayer.removeChildren(); wallSprite.visible = true;
+      updateProductionStatus();
+      return;
+    }
+
+    await animar({ from:full1, to:getZoomFit(heroSprite, settings.zoomB, item.recentX, item.recentY), ms:settings.zoomInMs });
     if (interrupted) return;
     await wait(settings.zoomHoldMs); if (interrupted) return;
     await animarPan(heroSprite, settings.panAmountX, settings.panAmountY, settings.panDirectionB, settings.panMs, item.recentX, item.recentY);
