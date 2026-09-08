@@ -51,8 +51,10 @@ STRIP_FLUSH_ROWS = max(1, int(os.getenv("MOSAICO_STRIP_ROWS", "20")))
 ENABLE_STRIP_RENDER = os.getenv("MOSAICO_STRIP_RENDER", "0") == "1"
 DEBUG_VERBOSE_CELLS = os.getenv("MOSAICO_DEBUG_VERBOSE_CELLS", "0") == "1"
 ENABLE_TILE_PRELOAD = os.getenv("MOSAICO_TILE_PRELOAD", "1") == "1"
-DEBUG_LOG_PATH = os.path.join(os.path.dirname(__file__), "debug_mosaico.log")
-PRODUCTION_LOG_PATH = os.path.join(os.path.dirname(__file__), "producao_mosaico.log")
+LOGS_DIR = os.path.join(PROJECT_ROOT, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+DEBUG_LOG_PATH = os.path.join(LOGS_DIR, "debug_mosaico.log")
+PRODUCTION_LOG_PATH = os.path.join(LOGS_DIR, "mosaico.log")
 
 # --------------------------------------------------
 # Priorização por recência (ajuste opcional)
@@ -87,13 +89,19 @@ def invalidar_cache_catalogo() -> None:
 
 
 def debug_log(msg: str) -> None:
-    with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(str(msg) + "\n")
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(str(msg) + "\n")
+    except Exception:
+        pass
 
 
 def production_log(msg: str) -> None:
-    with open(PRODUCTION_LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(str(msg) + "\n")
+    try:
+        with open(PRODUCTION_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(str(msg) + "\n")
+    except Exception:
+        pass
 
 
 _TERMINAL_LOG_LOCK = Lock()
@@ -101,7 +109,7 @@ _TERMINAL_PROGRESS_ACTIVE = False
 
 
 def terminal_log(msg: str, level: str = "INFO", arquivo: Optional[str] = None) -> None:
-    """Log simples com timestamp para acompanhar execução no terminal."""
+    """Log simples com timestamp para acompanhar execução no terminal e salvar no log central."""
     global _TERMINAL_PROGRESS_ACTIVE
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     prefixo_arquivo = f"[{arquivo}] " if arquivo else ""
@@ -111,6 +119,11 @@ def terminal_log(msg: str, level: str = "INFO", arquivo: Optional[str] = None) -
             print("", flush=True)
             _TERMINAL_PROGRESS_ACTIVE = False
         print(linha, flush=True)
+        try:
+            with open(PRODUCTION_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(linha + "\n")
+        except Exception:
+            pass
 
 
 class TerminalProgress:
@@ -919,11 +932,15 @@ def criar_mosaico(
 
     if largura_base < MIN_BASE_WIDTH:
         terminal_log(
-            f"Erro final no processamento: imagem base com largura {largura_base}px (minimo {MIN_BASE_WIDTH}px).",
-            level="ERROR",
+            f"Aviso: imagem base com largura {largura_base}px < {MIN_BASE_WIDTH}px. Aplicando upscale automatico...",
+            level="WARNING",
             arquivo=nome_arquivo_base,
         )
-        raise ValueError("A imagem base deve ter no mínimo 1000 px de largura.")
+        escala = MIN_BASE_WIDTH / max(1, largura_base)
+        novo_w = MIN_BASE_WIDTH
+        novo_h = int(img_base.height * escala)
+        img_base = img_base.resize((novo_w, novo_h), Image.Resampling.LANCZOS)
+        largura_base, altura_base = img_base.size
 
     colunas = FIXED_COLUMNS
     linhas = FIXED_COLUMNS
@@ -1165,8 +1182,9 @@ def calcular_tamanho_final(
         largura_base = img.width
         altura_base = img.height
 
+    # Se a largura for menor, o mosaico sera feito com upscale automatico
     if largura_base < MIN_BASE_WIDTH:
-        return 0, 0, "A imagem base deve ter no mínimo 1000 px de largura."
+        largura_base = MIN_BASE_WIDTH
 
     colunas = FIXED_COLUMNS
     linhas = FIXED_COLUMNS

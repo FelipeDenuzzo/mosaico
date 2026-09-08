@@ -7,15 +7,33 @@ const http = require('http');
 const ROOT = path.resolve(__dirname);
 const OUTPUT_DIR = path.join(ROOT, 'Output');
 const MANIFEST_PATH = path.join(ROOT, 'manifest.json');
+const LOGS_DIR = path.join(ROOT, 'logs');
+
+if (!fs.existsSync(LOGS_DIR)) {
+  try { fs.mkdirSync(LOGS_DIR, { recursive: true }); } catch(e) {}
+}
+const LOG_FILE = path.join(LOGS_DIR, 'watch_manifest.log');
+
+function log(msg) {
+  const ts = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const line = `[${ts}] ${msg}`;
+  console.log(line);
+  try {
+    fs.appendFileSync(LOG_FILE, line + '\n', 'utf8');
+  } catch(e) {}
+}
 
 const VALID_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
-const MAX_MOSAICS = 5;
+const MAX_MOSAICS = 10; // Mantém até 10 mosaicos recentes na parede principal
 const PORT = 8081;
 
 let state = { mosaics: [], queue: [], seen: [], isBusy: false, isBusyTimestamp: 0 };
 
 function readCurrentManifest() {
   try {
+    if (!fs.existsSync(MANIFEST_PATH)) {
+      return { mosaics: [], queue: [], seen: [], isBusy: false, isBusyTimestamp: 0 };
+    }
     const raw = fs.readFileSync(MANIFEST_PATH, 'utf8');
     const json = JSON.parse(raw);
     return {
@@ -26,7 +44,7 @@ function readCurrentManifest() {
       isBusyTimestamp: typeof json.isBusyTimestamp === 'number' ? json.isBusyTimestamp : 0
     };
   } catch (e) {
-    return { mosaics: [], queue: [], seen: [], isBusy: false };
+    return { mosaics: [], queue: [], seen: [], isBusy: false, isBusyTimestamp: 0 };
   }
 }
 
@@ -34,128 +52,99 @@ function saveManifest() {
   const newJson = JSON.stringify(state, null, 2);
   try {
     fs.writeFileSync(MANIFEST_PATH, newJson, 'utf8');
-    console.log(`[watch-manifest] Manifest atualizado: ${state.mosaics.length} exibidos, ${state.queue.length} na fila.`);
+    log(`[watch-manifest] Manifest atualizado: ${state.mosaics.length} exibidos, ${state.queue.length} na fila.`);
   } catch(e) {
-    console.error('[watch-manifest] Erro ao salvar manifest:', e);
+    log(`[watch-manifest] Erro ao salvar manifest: ${e.message}`);
   }
 }
 
 function syncWithFolder(isStartup = false) {
-  if (!fs.existsSync(OUTPUT_DIR)) return;
-  const files = fs.readdirSync(OUTPUT_DIR, { withFileTypes: true });
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    try { fs.mkdirSync(OUTPUT_DIR, { recursive: true }); } catch(e) {}
+    return;
+  }
+  const entries = fs.readdirSync(OUTPUT_DIR, { withFileTypes: true });
 
   const validFiles = new Map();
-  for (const entry of files) {
+  const fileList = [];
+
+  for (const entry of entries) {
     if (!entry.isFile()) continue;
     const ext = path.extname(entry.name).toLowerCase();
     if (!VALID_EXT.has(ext)) continue;
 
     const fullPath = path.join(OUTPUT_DIR, entry.name);
-    const stat = fs.statSync(fullPath);
-    
-    let recentX = null;
-    let recentY = null;
-    const jsonPath = fullPath + '.json';
-    if (fs.existsSync(jsonPath)) {
-      try {
-        const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-        if (jsonData.recent_x !== undefined) recentX = jsonData.recent_x;
-        if (jsonData.recent_y !== undefined) recentY = jsonData.recent_y;
-      } catch(e) {}
-    }
+    try {
+      const stat = fs.statSync(fullPath);
+      let recentX = null;
+      let recentY = null;
+      const jsonPath = fullPath + '.json';
+      if (fs.existsSync(jsonPath)) {
+        try {
+          const jsonData = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+          if (jsonData.recent_x !== undefined) recentX = jsonData.recent_x;
+          if (jsonData.recent_y !== undefined) recentY = jsonData.recent_y;
+        } catch(e) {}
+      }
 
-    validFiles.set(entry.name, {
-      file: `/Output/${encodeURIComponent(entry.name)}`,
-      name: entry.name,
-      createdAt: stat.mtime.toISOString(),
-      ...(recentX !== null && { recentX }),
-      ...(recentY !== null && { recentY })
-    });
+      const item = {
+        file: `/Output/${encodeURIComponent(entry.name)}`,
+        name: entry.name,
+        createdAt: stat.mtime.toISOString(),
+        mtimeMs: stat.mtimeMs,
+        ...(recentX !== null && { recentX }),
+        ...(recentY !== null && { recentY })
+      };
+      validFiles.set(entry.name, item);
+      fileList.push(item);
+    } catch(e) {}
   }
+
+  // Ordena decrescente: o mais recente primeiro
+  fileList.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   const oldStateStr = JSON.stringify(state);
 
-  state.mosaics = state.mosaics.filter(m => validFiles.has(m.name));
-  
   if (isStartup) {
-    // Ao iniciar, zeramos a fila antiga. Não queremos herdar fantasmas.
-    if (state.queue && state.queue.length > 0) {
-      if (!state.seen) state.seen = [];
-      state.seen.push(...state.queue.map(q => q.name));
-    }
+    // Ao iniciar: carrega os mosaicos já existentes em Output/ diretamente na parede
+    log(`[watch-manifest] Startup: ${fileList.length} mosaicos existentes detectados em Output/.`);
+    state.mosaics = fileList.slice(0, MAX_MOSAICS);
+    state.seen = fileList.slice(MAX_MOSAICS).map(f => f.name);
     state.queue = [];
-    state.isBusy = false; // Reset busy status on boot
+    state.isBusy = false;
     state.isBusyTimestamp = 0;
   } else {
+    // Modo watcher regular
+    state.mosaics = state.mosaics.filter(m => validFiles.has(m.name));
     state.queue = state.queue.filter(m => validFiles.has(m.name));
-  }
+    if (!state.seen) state.seen = [];
+    state.seen = state.seen.filter(name => validFiles.has(name));
 
-  if (!state.seen) state.seen = [];
-  state.seen = state.seen.filter(name => validFiles.has(name));
+    const existingNames = new Set([
+      ...state.mosaics.map(m => m.name),
+      ...state.queue.map(m => m.name),
+      ...state.seen
+    ]);
 
-  const existingNames = new Set([
-    ...state.mosaics.map(m => m.name),
-    ...state.queue.map(m => m.name),
-    ...state.seen
-  ]);
-
-  const novos = [];
-  for (const [name, meta] of validFiles.entries()) {
-    if (!existingNames.has(name)) {
-      if (isStartup) {
-        // Se encontrou arquivo no init que não é da parede, tratamos como 'visto'
-        // para nunca criar fila no boot.
-        state.seen.push(name);
-      } else {
-        // Apenas arquivos realmente novos criados durante o watcher vão para fila
-        novos.push(meta);
+    const novos = [];
+    for (const item of fileList) {
+      if (!existingNames.has(item.name)) {
+        novos.push(item);
       }
     }
-  }
 
-  novos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  
-  // Transição do estado inchado antigo:
-  // Se já tínhamos mais mosaicos do que o permitido (ex: 102),
-  // ajustamos agora: pegamos os excedentes e movemos para a lista de vistos 'seen'
-  if (state.mosaics.length > MAX_MOSAICS) {
-    const excess = state.mosaics.slice(0, state.mosaics.length - MAX_MOSAICS);
-    const names = excess.map(m => m.name);
-    state.seen.push(...names);
-    state.mosaics = state.mosaics.slice(-MAX_MOSAICS);
-  }
+    if (novos.length > 0) {
+      log(`[watch-manifest] ${novos.length} novos mosaicos adicionados à fila.`);
+      state.queue.push(...novos);
+      state.queue.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      state.isBusy = true;
+      state.isBusyTimestamp = Date.now();
+    }
 
-  if (novos.length > 0) {
-    state.queue.push(...novos);
-    state.queue.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    state.isBusy = true;
-    state.isBusyTimestamp = Date.now();
-  }
-
-  while (state.mosaics.length < MAX_MOSAICS && state.queue.length > 0) {
-    state.mosaics.push(state.queue.shift());
-  }
-
-  // Manter no disco apenas os arquivos que estão ativos na parede (mosaics) ou na fila (queue)
-  const activeNames = new Set([
-    ...state.mosaics.map(m => m.name),
-    ...state.queue.map(m => m.name)
-  ]);
-
-  for (const name of validFiles.keys()) {
-    if (!activeNames.has(name)) {
-      const removePath = path.join(OUTPUT_DIR, name);
-      try {
-        if (fs.existsSync(removePath)) {
-          fs.unlinkSync(removePath);
-          const jsonRemove = removePath + '.json';
-          if (fs.existsSync(jsonRemove)) fs.unlinkSync(jsonRemove);
-          validFiles.delete(name);
-          console.log(`[watch-manifest] Removido arquivo excedente do Output/: ${name}`);
-        }
-      } catch(e) {
-        console.warn(`[watch-manifest] Erro ao remover do Output/: ${name}:`, e.message);
-      }
+    // Se houver vaga na parede e itens na fila, sobe automaticamente
+    while (state.mosaics.length < MAX_MOSAICS && state.queue.length > 0) {
+      const nextItem = state.queue.shift();
+      state.mosaics.push(nextItem);
     }
   }
 
@@ -165,9 +154,9 @@ function syncWithFolder(isStartup = false) {
 }
 
 state = readCurrentManifest();
-console.log(`[watch-manifest] Estado inicial carregado da memoria: Parede: ${state.mosaics.length}, Fila: ${state.queue.length}`);
-syncWithFolder(true); // Passa true para o boot
-console.log(`[watch-manifest] Estado inicial apos limpeza: Parede: ${state.mosaics.length}, Fila: ${state.queue.length}`);
+log(`[watch-manifest] Estado inicial carregado da memoria: Parede: ${state.mosaics.length}, Fila: ${state.queue.length}`);
+syncWithFolder(true); // Inicialização segura
+log(`[watch-manifest] Estado inicial apos sync: Parede: ${state.mosaics.length}, Fila: ${state.queue.length}`);
 
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -203,7 +192,7 @@ const server = http.createServer((req, res) => {
           currentConfig.cameraIndex = parseInt(data.cameraIndex, 10);
         }
         fs.writeFileSync(configPath, JSON.stringify(currentConfig, null, 2), 'utf8');
-        console.log(`[watch-manifest] Configuração da câmera salva: ${intervalSeconds}s (Índice da câmera: ${currentConfig.cameraIndex})`);
+        log(`[watch-manifest] Configuração da câmera salva: ${intervalSeconds}s (Índice da câmera: ${currentConfig.cameraIndex})`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true, ...currentConfig }));
       } catch (e) {
@@ -227,7 +216,7 @@ const server = http.createServer((req, res) => {
       try {
         const configPath = path.join(ROOT, 'exibicao_config.json');
         fs.writeFileSync(configPath, body, 'utf8');
-        console.log(`[watch-manifest] Configuração de exibição salva no disco.`);
+        log(`[watch-manifest] Configuração de exibição salva no disco.`);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: true }));
       } catch (e) {
@@ -242,19 +231,6 @@ const server = http.createServer((req, res) => {
          const removed = state.mosaics.shift();
          if (!state.seen) state.seen = [];
          state.seen.push(removed.name);
-
-         // Deleta o arquivo físico rotacionado para manter somente os últimos 5
-         const removePath = path.join(OUTPUT_DIR, removed.name);
-         if (fs.existsSync(removePath)) {
-           try {
-             fs.unlinkSync(removePath);
-             const jsonRemove = removePath + '.json';
-             if (fs.existsSync(jsonRemove)) fs.unlinkSync(jsonRemove);
-             console.log(`[watch-manifest] Mosaico antigo removido do disco: ${removed.name}`);
-           } catch(e) {
-             console.error(`[watch-manifest] Erro ao remover mosaico antigo:`, e.message);
-           }
-         }
       }
       state.mosaics.push(nextItem);
       saveManifest();
@@ -284,24 +260,24 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`[watch-manifest] Endpoint de rotacao rodando na porta ${PORT}`);
+    log(`[watch-manifest] Endpoint rodando na porta ${PORT}`);
 });
 
 if (chokidar) {
   const watcher = chokidar.watch(OUTPUT_DIR, { persistent: true, ignoreInitial: true, depth: 0 });
   watcher
     .on('add', (filePath) => {
-      console.log('[watch-manifest] Novo mosaico detectado:', path.basename(filePath));
+      log(`[watch-manifest] Novo mosaico detectado: ${path.basename(filePath)}`);
       syncWithFolder();
     })
     .on('unlink', (filePath) => {
-      console.log('[watch-manifest] Mosaico removido:', path.basename(filePath));
+      log(`[watch-manifest] Mosaico removido: ${path.basename(filePath)}`);
       syncWithFolder();
     })
-    .on('error', (e) => console.error('[watch-manifest] Erro watcher:', e));
-  console.log('[watch-manifest] Monitorando Output/ com chokidar.');
+    .on('error', (e) => log(`[watch-manifest] Erro watcher: ${e.message}`));
+  log('[watch-manifest] Monitorando Output/ com chokidar.');
 } else {
-  console.log('[watch-manifest] chokidar nao encontrado; usando fs.watch nativo do Node.');
+  log('[watch-manifest] chokidar nao encontrado; usando fs.watch nativo do Node.');
   if (fs.existsSync(OUTPUT_DIR)) {
     let debounceTimer = null;
     fs.watch(OUTPUT_DIR, (eventType, filename) => {
@@ -310,7 +286,7 @@ if (chokidar) {
       if (!VALID_EXT.has(ext)) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        console.log(`[watch-manifest] Atualizacao detectada em Output/: ${filename}`);
+        log(`[watch-manifest] Atualizacao detectada em Output/: ${filename}`);
         syncWithFolder();
       }, 500);
     });

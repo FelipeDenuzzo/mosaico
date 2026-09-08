@@ -1,6 +1,8 @@
 import os
+import sys
 import time
 import json
+import subprocess
 from datetime import datetime
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -9,38 +11,93 @@ import cv2
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INPUT_DIR = os.path.join(BASE_DIR, "input")
 CONFIG_PATH = os.path.join(BASE_DIR, "camera_config.json")
-LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_log.txt")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+LOG_PATH = os.path.join(LOGS_DIR, "captura.log")
 
 STREAM_PORT = 8082
 IDLE_TIMEOUT_DEFAULT = 600  # 10 minutos em segundos
+CAPTURE_COOLDOWN_SEC = 8.0  # Tempo mínimo entre fotos consecutivas
 
 # Estado compartilhado para streaming e status
 _FRAME_LOCK = threading.Lock()
 _LATEST_JPEG = None
-_NEW_FRAME_EVENT = threading.Event()
 _LAST_MOTION_TIME = time.time()
+_LAST_CAPTURE_TIME = 0.0
 _IS_CAMERA_UNLOCKED = True
+_LOCK_REASON = "Inicializando"
 _CAMERA_ACTIVE = False
+_ACTIVE_CAMERA_INDEX = None
+_ACTIVE_BACKEND = "N/A"
 _ACTIVE_STREAM_CLIENTS = 0
 _CLIENTS_LOCK = threading.Lock()
 
 def log(msg: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     line = f"[{ts}] {msg}"
-    print(line)
+    print(line, flush=True)
     try:
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except Exception:
         pass
 
-def is_camera_unlocked() -> bool:
-    # 1. Verificar se há arquivos na pasta input (evita race condition durante estabilização)
+def classify_camera_device(name: str) -> tuple[bool, str]:
+    """Classifica se o dispositivo é webcam USB externa ou câmera integrada."""
+    n_lower = name.lower()
+    if any(k in n_lower for k in ["integrated", "integrada", "internal", "embutida", "built-in", "front"]):
+        return False, "CÂMERA INTEGRADA (ONBOARD)"
+    return True, "WEBCAM USB EXTERNA"
+
+def get_directshow_device_names():
+    """Consulta a lista de câmeras DirectShow na ordem exata de índices do Windows."""
+    names = []
+    if os.name == 'nt':
+        try:
+            cmd = (
+                'powershell -NoProfile -Command "'
+                '$path = \'Registry::HKEY_CLASSES_ROOT\\CLSID\\{860BB310-5D01-11BD-9B1A-00065BA000F4}\\Instance\'; '
+                'if (Test-Path $path) { '
+                '  Get-ChildItem $path | ForEach-Object { (Get-ItemProperty $_.PSPath).FriendlyName } '
+                '}"'
+            )
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0:
+                for line in res.stdout.strip().splitlines():
+                    if line.strip():
+                        names.append(line.strip())
+        except Exception:
+            pass
+    return names
+
+def get_windows_pnp_cameras():
+    """Identifica dispositivos de camera no Windows via PowerShell PnPEntity."""
+    cameras = []
+    if os.name == 'nt':
+        try:
+            cmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPClass -in @(\'Camera\', \'Image\') } | ForEach-Object { $_.Name + \'|\' + $_.DeviceID }"'
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=6)
+            if res.returncode == 0:
+                for line in res.stdout.strip().splitlines():
+                    line = line.strip()
+                    if '|' in line:
+                        name, dev_id = line.split('|', 1)
+                        is_usb, label = classify_camera_device(name)
+                        cameras.append({"name": name, "device_id": dev_id, "is_usb": is_usb, "label": label})
+        except Exception as e:
+            log(f"Aviso ao consultar PnPEntity no Windows: {e}")
+    return cameras
+
+def is_camera_unlocked() -> tuple[bool, str]:
+    global _LOCK_REASON
+    # 1. Verificar se há arquivos na pasta input
     if os.path.exists(INPUT_DIR):
         try:
             files = [f for f in os.listdir(INPUT_DIR) if not f.startswith(".")]
             if len(files) > 0:
-                return False
+                reason = f"Arquivos pendentes na pasta input ({len(files)} arquivos)"
+                _LOCK_REASON = reason
+                return False, reason
         except Exception:
             pass
 
@@ -48,20 +105,28 @@ def is_camera_unlocked() -> bool:
     manifest_path = os.path.join(BASE_DIR, "manifest.json")
     if os.path.exists(manifest_path):
         try:
-            with open(manifest_path, "r") as f:
+            with open(manifest_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 is_busy = data.get("isBusy", False)
                 is_busy_timestamp = data.get("isBusyTimestamp", 0)
                 queue = data.get("queue", [])
                 
-                # Watchdog: se isBusy estiver true por mais de 45 segundos, ignoramos a trava
+                # Watchdog para isBusy
                 if is_busy and is_busy_timestamp > 0:
                     age_ms = time.time() * 1000 - is_busy_timestamp
                     if age_ms > 45000:
-                        is_busy = False # Ignora a trava (evita deadlocks)
+                        is_busy = False
                         
-                if is_busy or len(queue) > 0:
-                    return False
+                if is_busy:
+                    reason = "Mural ocupado exibindo mosaico (isBusy=true)"
+                    _LOCK_REASON = reason
+                    return False, reason
+                
+                # Se há itens na fila do manifest há menos de 60s, aguarda
+                if len(queue) > 0:
+                    reason = f"Mosaicos aguardando na fila de exibição ({len(queue)} itens)"
+                    _LOCK_REASON = reason
+                    return False, reason
         except Exception:
             pass
 
@@ -69,19 +134,33 @@ def is_camera_unlocked() -> bool:
     jobs_path = os.path.join(BASE_DIR, "jobs.json")
     if os.path.exists(jobs_path):
         try:
-            with open(jobs_path, "r") as f:
+            with open(jobs_path, "r", encoding="utf-8") as f:
                 jobs = json.load(f)
+                agora_ts = time.time()
                 for job_id, job in jobs.items():
                     if job.get("status") == "processando":
-                        return False
+                        # Watchdog para jobs travados em processando há mais de 120s
+                        t_criacao = job.get("timestamp_criacao")
+                        job_stuck = False
+                        if t_criacao:
+                            try:
+                                dt = datetime.fromisoformat(t_criacao)
+                                if (agora_ts - dt.timestamp()) > 120:
+                                    job_stuck = True
+                            except Exception:
+                                pass
+                        if not job_stuck:
+                            reason = f"Job em processamento: {job_id}"
+                            _LOCK_REASON = reason
+                            return False, reason
         except Exception:
             pass
 
-    return True
+    _LOCK_REASON = "Livre para disparo"
+    return True, "Livre"
 
 class CameraStreamHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
-        # Desativa logs repetitivos no terminal para cada requisição HTTP/frame
         pass
 
     def do_OPTIONS(self):
@@ -108,7 +187,6 @@ class CameraStreamHandler(BaseHTTPRequestHandler):
 
             try:
                 while _CAMERA_ACTIVE:
-                    _NEW_FRAME_EVENT.wait(timeout=0.5)
                     with _FRAME_LOCK:
                         frame_bytes = _LATEST_JPEG
 
@@ -118,7 +196,7 @@ class CameraStreamHandler(BaseHTTPRequestHandler):
                         self.wfile.write(f'Content-Length: {len(frame_bytes)}\r\n\r\n'.encode('ascii'))
                         self.wfile.write(frame_bytes)
                         self.wfile.write(b'\r\n')
-                    time.sleep(0.01)
+                    time.sleep(0.04)  # ~25 FPS estável
             except (BrokenPipeError, ConnectionResetError):
                 pass
             finally:
@@ -138,7 +216,10 @@ class CameraStreamHandler(BaseHTTPRequestHandler):
 
             payload = {
                 "active": _CAMERA_ACTIVE,
+                "cameraIndex": _ACTIVE_CAMERA_INDEX,
+                "cameraBackend": _ACTIVE_BACKEND,
                 "unlocked": _IS_CAMERA_UNLOCKED,
+                "lockReason": _LOCK_REASON,
                 "isIdle": is_idle,
                 "idleSeconds": round(idle_seconds, 1),
                 "idleTimeoutSeconds": IDLE_TIMEOUT_DEFAULT
@@ -151,101 +232,154 @@ class CameraStreamHandler(BaseHTTPRequestHandler):
 def start_stream_server(port=STREAM_PORT):
     try:
         server = ThreadingHTTPServer(('0.0.0.0', port), CameraStreamHandler)
-        log(f"Servidor de streaming da camera ativo em http://127.0.0.1:{port}/video_feed")
+        log(f"Servidor de streaming ativo em http://127.0.0.1:{port}/video_feed")
         server.serve_forever()
     except Exception as e:
         log(f"Erro ao iniciar servidor de streaming: {e}")
 
-def open_best_camera(preferred_index=0):
-    candidates = [preferred_index]
-    for i in [0, 1, 2, 3]:
-        if i not in candidates:
-            candidates.append(i)
+def test_camera_device(idx, backend, backend_name):
+    """Abre e avalia se o índice e backend fornecem imagem real (não-preta)."""
+    try:
+        cap = cv2.VideoCapture(idx, backend)
+        if not cap.isOpened():
+            return None, 0, 0, 0.0, "Não abriu"
 
-    log(f"Iniciando deteccao de camera funcional (preferencia: indice {preferred_index})...")
-    
+        # Configurações para webcams USB modernas
+        if backend == cv2.CAP_DSHOW:
+            cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+        # Descarte de até 10 frames de aquecimento do sensor
+        valid_frames = 0
+        mean_vals = []
+        std_vals = []
+        last_frame = None
+
+        for _ in range(12):
+            ret, frame = cap.read()
+            if ret and frame is not None and frame.size > 0:
+                valid_frames += 1
+                m = frame.mean()
+                s = frame.std()
+                mean_vals.append(m)
+                std_vals.append(s)
+                last_frame = frame
+            time.sleep(0.08)
+
+        if valid_frames == 0 or last_frame is None:
+            cap.release()
+            return None, 0, 0, 0.0, "Falha ao ler frames"
+
+        avg_mean = sum(mean_vals[-5:]) / max(1, len(mean_vals[-5:]))
+        avg_std = sum(std_vals[-5:]) / max(1, len(std_vals[-5:]))
+        h, w = last_frame.shape[:2]
+
+        # Se a imagem é completamente preta (brilho < 2.0 e desvio < 2.0)
+        if avg_mean < 2.0 and avg_std < 2.0:
+            cap.release()
+            return None, w, h, avg_mean, "Imagem 100% preta (sensor IR ou lente tampada)"
+
+        return cap, w, h, avg_mean, "OK"
+    except Exception as e:
+        return None, 0, 0, 0.0, f"Exceção: {e}"
+
+def open_best_camera(preferred_index=1):
+    global _ACTIVE_CAMERA_INDEX, _ACTIVE_BACKEND
+    log("=" * 60)
+    log(f"INICIANDO DETECCAO DE CAMERA (Alvo: Webcam USB no Indice {preferred_index})")
+    log("=" * 60)
+
+    # 1. Consulta dispositivos físicos no Windows (apenas informativo para log)
+    pnp_cams = get_windows_pnp_cameras()
+    if pnp_cams:
+        log("Dispositivos de video detectados pelo Windows:")
+        for c in pnp_cams:
+            log(f"  - [{c['label']}] {c['name']}")
+
     backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF] if os.name == 'nt' else [cv2.CAP_ANY]
+
+    # Prioridade Máxima: Insistir na Câmera USB configurada (Índice 1) com até 3 tentativas
+    for attempt in range(1, 4):
+        for backend in backends:
+            backend_name = "DSHOW" if backend == cv2.CAP_DSHOW else ("MSMF" if backend == cv2.CAP_MSMF else "ANY")
+            log(f"  [Tentativa {attempt}/3] Conectando a Webcam USB (Indice {preferred_index}) [{backend_name}]...")
+            cap, w, h, brightness, status = test_camera_device(preferred_index, backend, backend_name)
+
+            if cap is not None:
+                log(f"  [SUCESSO] Webcam USB ATIVA no Indice {preferred_index} ({backend_name})! Resolucao: {w}x{h}, Brilho medio: {brightness:.1f}")
+                log("=" * 60)
+                _ACTIVE_CAMERA_INDEX = preferred_index
+                _ACTIVE_BACKEND = backend_name
+                return cap, preferred_index
+            else:
+                log(f"  Indice {preferred_index} [{backend_name}]: {status}")
+        time.sleep(0.6)
+
+    # Fallback apenas se a USB não responder de forma alguma
+    log(f"  [AVISO] Nao foi possivel abrir a Webcam USB no Indice {preferred_index}. Verificando outros indices...")
+    candidates = [i for i in [0, 2, 3] if i != preferred_index]
+
     for idx in candidates:
         for backend in backends:
-            backend_name = "DSHOW" if backend == cv2.CAP_DSHOW else ("MSMF" if backend == cv2.CAP_MSMF else "DEFAULT")
-            try:
-                cap = cv2.VideoCapture(idx, backend)
-                if cap.isOpened():
-                    # Tenta ler ate 5 frames para garantir que o sensor inicializou
-                    for _ in range(5):
-                        ret, test_frame = cap.read()
-                        if ret and test_frame is not None and test_frame.size > 0:
-                            # Tenta definir resolucao alta
-                            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-                            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-                            log(f"✓ Camera FUNCIONANDO no indice {idx} (backend: {backend_name}, resolucao: {test_frame.shape[1]}x{test_frame.shape[0]})!")
-                            
-                            # Atualiza config com o indice verificado
-                            try:
-                                cfg = {}
-                                if os.path.exists(CONFIG_PATH):
-                                    with open(CONFIG_PATH, "r") as f:
-                                        cfg = json.load(f)
-                                cfg["cameraIndex"] = idx
-                                with open(CONFIG_PATH, "w") as f:
-                                    json.dump(cfg, f, indent=2)
-                            except Exception:
-                                pass
-                            return cap, idx
-                        time.sleep(0.1)
-                    cap.release()
-            except Exception as e:
-                pass
-                
-    log("ERRO: Nenhuma camera retornou frames de video validos. Verifique se a webcam esta conectada e com permissoes ativas.")
+            backend_name = "DSHOW" if backend == cv2.CAP_DSHOW else ("MSMF" if backend == cv2.CAP_MSMF else "ANY")
+            log(f"  Testando Indice alternativo {idx} [{backend_name}]...")
+            cap, w, h, brightness, status = test_camera_device(idx, backend, backend_name)
+            if cap is not None:
+                log(f"  [FALLBACK] Camera alternativa conectada no Indice {idx} ({backend_name})! Resolucao: {w}x{h}")
+                log("=" * 60)
+                _ACTIVE_CAMERA_INDEX = idx
+                _ACTIVE_BACKEND = backend_name
+                return cap, idx
+
+    log("ERRO CRITICO: Nenhuma camera retornou imagem valida.")
+    log("=" * 60)
+    _ACTIVE_CAMERA_INDEX = None
+    _ACTIVE_BACKEND = "N/A"
     return None, None
 
 def main():
-    global _CAMERA_ACTIVE, _LATEST_JPEG, _LAST_MOTION_TIME, _IS_CAMERA_UNLOCKED
+    global _CAMERA_ACTIVE, _LATEST_JPEG, _LAST_MOTION_TIME, _IS_CAMERA_UNLOCKED, _LAST_CAPTURE_TIME
     os.makedirs(INPUT_DIR, exist_ok=True)
-    log("Iniciando modulo de captura da camera...")
+    log("Iniciando modulo de captura da camera (Mosaico EXPO)...")
 
-    # Inicia servidor HTTP de streaming em background
+    # Inicia servidor HTTP de streaming
     http_thread = threading.Thread(target=start_stream_server, args=(STREAM_PORT,), daemon=True)
     http_thread.start()
 
-    # Carrega configuracoes (padrao: 1 para webcam USB externa)
-    preferred_index = 1
-    interval_seconds = 60
+    preferred_index = 1  # Padrao: 1 para a Camera desejada
     if os.path.exists(CONFIG_PATH):
         try:
-            with open(CONFIG_PATH, "r") as f:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
                 preferred_index = config_data.get("cameraIndex", 1)
-                interval_seconds = config_data.get("intervalSeconds", 60)
         except Exception as e:
             log(f"Aviso ao ler camera_config.json: {e}")
 
     cap, camera_index = open_best_camera(preferred_index)
     if not cap:
-        log("Tentando novamente em 5 segundos...")
+        log("Nova tentativa em 5 segundos...")
         time.sleep(5)
         cap, camera_index = open_best_camera(preferred_index)
-        if not cap:
-            log("Falha critica: Nenhuma webcam disponivel. O script continuara tentando a cada 10s...")
 
     _CAMERA_ACTIVE = (cap is not None and cap.isOpened())
-    prev_gray = None
-    motion_threshold = 0.015  # 1.5% de pixels alterados
+
+    ref_gray = None
+    last_ref_time = time.time()
     start_time = time.time()
-    last_photo_time = time.time()
     last_heartbeat_time = time.time()
+    consecutive_black_frames = 0
     consecutive_read_failures = 0
 
     try:
         while True:
             now = time.time()
 
-            # Se camera nao estiver aberta, tenta reconectar
+            # Reconexão se câmera perdida
             if not cap or not cap.isOpened():
                 _CAMERA_ACTIVE = False
-                if now - last_heartbeat_time > 10.0:
-                    log("Aguardando conexao com a camera...")
+                if now - last_heartbeat_time > 8.0:
+                    log("Aguardando câmera ser conectada...")
                     last_heartbeat_time = now
                     cap, camera_index = open_best_camera(preferred_index)
                     _CAMERA_ACTIVE = (cap is not None and cap.isOpened())
@@ -253,119 +387,160 @@ def main():
                 continue
 
             _CAMERA_ACTIVE = True
-            ret, frame = cap.read()
-            if not ret or frame is None:
+
+            try:
+                ret, frame = cap.read()
+            except Exception as e:
+                log(f"Exceção ao ler frame: {e}. Reiniciando câmera...")
+                try: cap.release()
+                except Exception: pass
+                time.sleep(1.0)
+                cap, camera_index = open_best_camera(preferred_index)
+                _CAMERA_ACTIVE = (cap is not None and cap.isOpened())
+                continue
+
+            if not ret or frame is None or frame.size == 0:
                 consecutive_read_failures += 1
-                if consecutive_read_failures >= 30: # 3 segundos sem frames
-                    log("Aviso: Falhas consecutivas de leitura da camera. Tentando reiniciar...")
-                    cap.release()
-                    cap, camera_index = open_best_camera(camera_index)
+                if consecutive_read_failures >= 25:
+                    log("Aviso: Múltiplas falhas de leitura. Reiniciando câmera...")
+                    try: cap.release()
+                    except Exception: pass
+                    cap, camera_index = open_best_camera(preferred_index)
                     consecutive_read_failures = 0
                 time.sleep(0.1)
                 continue
 
             consecutive_read_failures = 0
-            unlocked = is_camera_unlocked()
-            _IS_CAMERA_UNLOCKED = unlocked
 
-            # Atualizar frame codificado para o stream MJPEG
-            # (otimização: gera JPEG leve de ~85% qualidade)
+            # Validação contínua de imagem preta
+            frame_mean = frame.mean()
+            if frame_mean < 1.5:
+                consecutive_black_frames += 1
+                if consecutive_black_frames == 60:
+                    log("ALERTA: A câmera está retornando frames 100% pretos há 3 segundos! Verifique lente/privacidade.")
+                if consecutive_black_frames >= 120:
+                    log("Tentando alternar/reiniciar câmera devido a tela preta contínua...")
+                    try: cap.release()
+                    except Exception: pass
+                    cap, camera_index = open_best_camera(preferred_index)
+                    consecutive_black_frames = 0
+                    continue
+            else:
+                consecutive_black_frames = 0
+
+            # Atualizar streaming MJPEG com enquadramento quadrado (mesma altura, largura quadrada)
             try:
-                # Reduz resolução para streaming apenas se for gigante (>1280px) para máxima fluidez
                 h, w = frame.shape[:2]
-                if w > 1280:
-                    scale = 1280.0 / w
-                    preview_frame = cv2.resize(frame, (1280, int(h * scale)), interpolation=cv2.INTER_AREA)
+                side = min(h, w)
+                sx = (w - side) // 2
+                sy = (h - side) // 2
+                square_stream = frame[sy:sy + side, sx:sx + side]
+
+                if side > 720:
+                    preview_frame = cv2.resize(square_stream, (720, 720), interpolation=cv2.INTER_AREA)
                 else:
-                    preview_frame = frame
+                    preview_frame = square_stream
 
                 ret_enc, jpeg_data = cv2.imencode('.jpg', preview_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
                 if ret_enc:
                     with _FRAME_LOCK:
                         _LATEST_JPEG = jpeg_data.tobytes()
-                    _NEW_FRAME_EVENT.set()
-                    _NEW_FRAME_EVENT.clear()
             except Exception:
                 pass
 
-            # Converter para tons de cinza e aplicar desfoque Gaussiano para detecção de movimento
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Verificação de status e travas
+            unlocked, lock_reason = is_camera_unlocked()
+            _IS_CAMERA_UNLOCKED = unlocked
+
+            # Detecção de Presença / Movimento estável
+            # Converte para tons de cinza com blur
+            small_for_motion = cv2.resize(frame, (320, 240), interpolation=cv2.INTER_AREA)
+            gray = cv2.cvtColor(small_for_motion, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-            if prev_gray is None:
-                prev_gray = gray
-                time.sleep(0.1)
+            if ref_gray is None:
+                ref_gray = gray
+                last_ref_time = now
+                time.sleep(0.04)
                 continue
 
-            # Diferença absoluta entre frames consecutivos
-            frame_delta = cv2.absdiff(prev_gray, gray)
+            # Compara frame atual com frame de referência de ~0.4s atrás
+            frame_delta = cv2.absdiff(ref_gray, gray)
             thresh = cv2.threshold(frame_delta, 25, 255, cv2.THRESH_BINARY)[1]
             thresh = cv2.dilate(thresh, None, iterations=2)
 
             non_zero = cv2.countNonZero(thresh)
-            total_pixels = frame.shape[0] * frame.shape[1]
+            total_pixels = 320 * 240
             motion_ratio = non_zero / total_pixels
 
-            prev_gray = gray
-            motion_detected = motion_ratio > motion_threshold
+            # Atualiza frame de referência a cada 0.4 segundos
+            if now - last_ref_time >= 0.4:
+                ref_gray = gray
+                last_ref_time = now
 
-            # Se houve movimento, atualiza o timestamp de atividade (reseta ociosidade)
+            motion_detected = (motion_ratio >= 0.015)  # 1.5% de pixels em movimento
+
             if motion_detected:
                 _LAST_MOTION_TIME = now
 
-            # Heartbeat informativo a cada 15 segundos
+            # Heartbeat periódico a cada 15s
             if now - last_heartbeat_time > 15.0:
                 idle_sec = now - _LAST_MOTION_TIME
-                status_str = "LIVRE para disparo" if unlocked else "BLOQUEADA (mural/fila ocupada)"
-                log(f"Camera ativa [indice {camera_index}]. Status: {status_str}. Inatividade: {idle_sec:.1f}s.")
+                status_str = "LIVRE para disparo" if unlocked else f"BLOQUEADA ({lock_reason})"
+                log(f"Câmera [Índice {camera_index}]: {status_str}. Inatividade: {idle_sec:.1f}s. Brilho: {frame_mean:.1f}.")
                 last_heartbeat_time = now
 
-            # Se a tela ou back-end estiverem ocupados, bloqueia novas fotos
+            # Se bloqueada pelo mural ou fila, não dispara
             if not unlocked:
-                prev_gray = None
-                time.sleep(0.2)
+                time.sleep(0.08)
                 continue
 
-            # Gatilho de tempo (intervalSeconds como fallback para teste/exposicao)
-            time_since_photo = now - last_photo_time
-            interval_trigger = (interval_seconds > 0) and (time_since_photo >= interval_seconds)
+            # Checa se passou o cooldown de captura e aquecimento inicial
+            time_since_last_capture = now - _LAST_CAPTURE_TIME
+            if motion_detected and (now - start_time > 3.0) and (time_since_last_capture > CAPTURE_COOLDOWN_SEC):
+                log(f"Presença detectada (ratio: {motion_ratio:.3f})! Capturando foto...")
 
-            # Disparar se houver movimento (ou intervalo) e após estabilização inicial de 3s
-            if (motion_detected or interval_trigger) and (now - start_time > 3.0):
-                motivo = f"Movimento detectado (ratio: {motion_ratio:.3f})" if motion_detected else f"Intervalo de {interval_seconds}s atingido"
-                log(f"{motivo}! Capturando foto...")
-
-                # Limpa frames antigos acumulados no buffer da webcam
-                for _ in range(5):
+                # Limpa frames antigos do buffer
+                for _ in range(4):
                     cap.grab()
                 ret_flush, frame_flush = cap.read()
                 if ret_flush and frame_flush is not None:
                     frame = frame_flush
 
+                # Enquadramento quadrado (mesma altura, largura centralizada)
+                fh, fw = frame.shape[:2]
+                side = min(fh, fw)
+                sx = (fw - side) // 2
+                sy = (fh - side) // 2
+                square_frame = frame[sy:sy + side, sx:sx + side]
+
+                # Garante no mínimo 1280x1280 para máxima nitidez no mosaico
+                if side < 1280:
+                    frame_save = cv2.resize(square_frame, (1280, 1280), interpolation=cv2.INTER_CUBIC)
+                else:
+                    frame_save = square_frame
+
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"captura_foto_{timestamp}.jpg"
                 filepath = os.path.join(INPUT_DIR, filename)
 
-                # Salva a imagem no formato JPEG com qualidade máxima (100)
-                cv2.imwrite(filepath, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
-                log(f"Foto salva com sucesso em: {filepath}")
+                cv2.imwrite(filepath, frame_save, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+                log(f"Foto salva com sucesso em: {filepath} ({frame_save.shape[1]}x{frame_save.shape[0]})")
 
-                last_photo_time = time.time()
+                _LAST_CAPTURE_TIME = time.time()
                 _LAST_MOTION_TIME = time.time()
-                prev_gray = None
-
-                # Aguarda o watcher iniciar o processamento antes de checar a trava de novo
-                time.sleep(1.5)
+                ref_gray = None
+                time.sleep(1.5)  # Aguarda watcher pegar o arquivo
 
             time.sleep(0.04)  # ~25 FPS loop
 
     except KeyboardInterrupt:
-        log("Encerrando script de captura...")
+        log("Encerrando captura da câmera...")
     finally:
         _CAMERA_ACTIVE = False
         if cap:
             cap.release()
-        log("Webcam liberada com sucesso.")
+        log("Câmera liberada com sucesso.")
 
 if __name__ == "__main__":
     main()

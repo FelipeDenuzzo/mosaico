@@ -5,10 +5,10 @@ echo ==================================================
 
 if exist ".venv\Scripts\python.exe" (
     echo [OK] Usando Python do ambiente virtual (.venv)...
-    .venv\Scripts\python.exe test_setup.py
+    .venv\Scripts\python.exe gerar_relatorio_diagnostico.py
 ) else (
     echo [AVISO] Ambiente .venv nao encontrado! Testando com Python do sistema...
-    python test_setup.py
+    python gerar_relatorio_diagnostico.py
 )
 
 echo.

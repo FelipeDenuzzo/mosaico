@@ -21,6 +21,21 @@ PASTA_TEMPORARIA_TILES = os.path.join(BASE_DIR, "archive")
 # Pasta do acervo final de tiles 400x400 usados pelo motor de mosaico
 PASTA_ACERVO_TILES = os.path.join(BASE_DIR, "acervo")
 
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+INDEXADOR_LOG_PATH = os.path.join(LOGS_DIR, "indexador.log")
+
+_builtin_print = print
+def print(*args, **kwargs):
+    _builtin_print(*args, **kwargs)
+    try:
+        msg = " ".join(str(a) for a in args)
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(INDEXADOR_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        pass
+
 
 # ==============================================================================
 # CONFIGURAÇÃO DE AGENDAMENTO
@@ -137,6 +152,8 @@ def log_indexacao_detalhada(categoria: str, path: str, data: dict) -> None:
 def iter_image_files(folder: str) -> Iterable[str]:
     for root, _, files in os.walk(folder):
         for name in files:
+            if name.startswith("."):
+                continue
             if Path(name).suffix.lower() in SUPPORTED_EXTENSIONS:
                 yield os.path.join(root, name)
 
@@ -262,6 +279,15 @@ def processar_pasta_temporaria(conn: sqlite3.Connection) -> int:
 
     os.makedirs(PASTA_TEMPORARIA_TILES, exist_ok=True)
     os.makedirs(PASTA_ACERVO_TILES, exist_ok=True)
+
+    # Limpeza preventiva de arquivos fantasmas do macOS (._*)
+    try:
+        for entry in os.scandir(PASTA_TEMPORARIA_TILES):
+            if entry.is_file() and entry.name.startswith("._"):
+                try: os.remove(entry.path)
+                except Exception: pass
+    except Exception:
+        pass
 
     arquivos = list(iter_image_files(PASTA_TEMPORARIA_TILES))
     if not arquivos:

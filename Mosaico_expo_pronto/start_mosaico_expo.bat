@@ -13,6 +13,17 @@ exit /b
 
 :venv_ok
 
+:: 0) Encerra instancias antigas para evitar duplicidade e travamento de camera/portas
+echo - Encerrando processos residuais anteriores...
+taskkill /FI "WINDOWTITLE eq HTTP Server*" /F /T >nul 2>&1
+taskkill /FI "WINDOWTITLE eq Auto Mosaic Watcher*" /F /T >nul 2>&1
+taskkill /FI "WINDOWTITLE eq Indexador*" /F /T >nul 2>&1
+taskkill /FI "WINDOWTITLE eq Watch Manifest*" /F /T >nul 2>&1
+taskkill /FI "WINDOWTITLE eq Captura Camera*" /F /T >nul 2>&1
+taskkill /F /IM python.exe /T >nul 2>&1
+taskkill /F /IM node.exe /T >nul 2>&1
+timeout /t 2 /nobreak >nul 2>&1
+
 :: 1) Servidor HTTP estatico (Mural) na porta 8000
 echo - Iniciando servidor HTTP (Porta 8000)...
 start /min "HTTP Server" cmd /k ".venv\Scripts\activate && python -u serve_site.py"

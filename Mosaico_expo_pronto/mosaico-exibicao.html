@@ -131,9 +131,25 @@
       transition: opacity 2.5s cubic-bezier(0.1, 0.8, 0.3, 1);
     }
 
-    /* Ocultação do cursor do mouse após inatividade */
-    body.hide-cursor, body.hide-cursor * {
+    /* Ocultação total do cursor do mouse após 5 segundos de inatividade */
+    html.hide-cursor,
+    html.hide-cursor *,
+    body.hide-cursor,
+    body.hide-cursor *,
+    canvas {
       cursor: none !important;
+    }
+
+    #cursor-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 99999;
+      cursor: none !important;
+      background: transparent;
+      display: none;
     }
 
     /* Visualização ao Vivo da Webcam (Modo Preparo) */
@@ -142,8 +158,10 @@
       top: 2.5vh;
       left: 50%;
       transform: translateX(-50%);
-      width: min(92vw, 840px);
       height: 55vh;
+      width: 55vh;
+      max-width: 92vw;
+      aspect-ratio: 1 / 1;
       z-index: 50;
       display: flex;
       flex-direction: column;
@@ -163,6 +181,7 @@
       position: relative;
       width: 100%;
       height: 100%;
+      aspect-ratio: 1 / 1;
       background: #0d0d0d;
       border-radius: 20px;
       overflow: hidden;
@@ -224,6 +243,7 @@
   </style>
 </head>
 <body>
+<div id="cursor-overlay"></div>
 <div id="stage-wrapper">
   <div id="camera-flash"></div>
   <div id="status">Carregando galeria...</div>
@@ -232,10 +252,6 @@
   <div id="camera-preview-container">
     <div id="camera-preview-box">
       <img id="camera-stream" src="http://127.0.0.1:8082/video_feed" alt="Câmera ao vivo" />
-      <div class="camera-badge">
-        <span class="live-dot"></span> AO VIVO
-      </div>
-      <div class="camera-instruction">Prepare-se para a foto!</div>
     </div>
   </div>
 
@@ -576,20 +592,54 @@
     startLoop();
   });
 
-  // ── Controle do Cursor ───────────────────────────────
+  // ── Controle do Cursor (Auto-hide após 5 segundos) ───
   let cursorTimeout = null;
-  function resetCursorTimer() {
+
+  function showCursor() {
+    document.documentElement.classList.remove('hide-cursor');
     document.body.classList.remove('hide-cursor');
+    document.documentElement.style.cursor = 'auto';
+    document.body.style.cursor = 'auto';
+    if (typeof app !== 'undefined' && app && app.view) {
+      app.view.style.cursor = 'auto';
+    }
+    const overlay = document.getElementById('cursor-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  function hideCursor() {
+    const panel = document.getElementById('panel');
+    if (panel && panel.open) return; // Se o painel DEV estiver aberto, mantém cursor visível para ajustes
+    document.documentElement.classList.add('hide-cursor');
+    document.body.classList.add('hide-cursor');
+    document.documentElement.style.cursor = 'none';
+    document.body.style.cursor = 'none';
+    if (typeof app !== 'undefined' && app && app.view) {
+      app.view.style.cursor = 'none';
+    }
+    const overlay = document.getElementById('cursor-overlay');
+    if (overlay) overlay.style.display = 'block';
+  }
+
+  function resetCursorTimer() {
+    showCursor();
     if (cursorTimeout) clearTimeout(cursorTimeout);
-    cursorTimeout = setTimeout(() => {
-      document.body.classList.add('hide-cursor');
-    }, 5000);
+    cursorTimeout = setTimeout(hideCursor, 5000);
   }
 
   function initCursorAutoHide() {
-    window.addEventListener('mousemove', resetCursorTimer, { passive: true });
-    window.addEventListener('mousedown', resetCursorTimer, { passive: true });
-    window.addEventListener('touchstart', resetCursorTimer, { passive: true });
+    const events = ['mousemove', 'mousedown', 'pointermove', 'touchstart', 'keydown'];
+    events.forEach(evt => {
+      window.addEventListener(evt, resetCursorTimer, { passive: true });
+    });
+
+    const overlay = document.getElementById('cursor-overlay');
+    if (overlay) {
+      ['mousemove', 'mousedown', 'pointermove', 'touchstart'].forEach(evt => {
+        overlay.addEventListener(evt, resetCursorTimer, { passive: true });
+      });
+    }
+
     resetCursorTimer();
   }
 
@@ -609,6 +659,18 @@
     }
   }
 
+  function initCameraStreamAutoReconnect() {
+    const camImg = document.getElementById('camera-stream');
+    if (camImg) {
+      camImg.onerror = () => {
+        setTimeout(() => {
+          camImg.src = 'http://127.0.0.1:8082/video_feed?t=' + Date.now();
+        }, 1500);
+      };
+    }
+  }
+  initCameraStreamAutoReconnect();
+
   async function checkCameraStatus() {
     try {
       const res = await fetch('http://127.0.0.1:8082/status');
@@ -616,6 +678,12 @@
         const data = await res.json();
         const previousIdle = isCameraIdle;
         isCameraIdle = !!data.isIdle;
+
+        // Se o servidor de streaming está ativo e a imagem não carregou, recarrega
+        const camImg = document.getElementById('camera-stream');
+        if (camImg && data.active && (camImg.naturalWidth === 0 || camImg.complete === false)) {
+          camImg.src = 'http://127.0.0.1:8082/video_feed?t=' + Date.now();
+        }
 
         if (isCameraIdle !== previousIdle) {
           if (isCameraIdle) {
@@ -742,7 +810,13 @@
         const manifestData = await lerManifest();
         manifest = manifestData.mosaics;
         queueCount = manifestData.queueCount;
-        if (!manifest.length) { setStatus('Nenhuma imagem encontrada.'); await wait(2000); continue; }
+        if (!manifest.length) {
+          setStatus('Aguardando fotos para o mural...');
+          setCameraPreviewVisible(true);
+          isInitialLoad = false;
+          await wait(2000);
+          continue;
+        }
         
         if (isInitialLoad) {
           manifest.forEach(m => preExistingFiles.add(m.file));

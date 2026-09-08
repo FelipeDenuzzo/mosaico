@@ -78,7 +78,9 @@ MAX_CONCURRENT_JOBS = max(1, int(os.getenv("MOSAICO_MAX_CONCURRENT_JOBS", "1")))
 # ==========================================
 # LOGGING
 # ==========================================
-LOG_FILE = os.path.join(BASE_DIR, "watcher_log.txt")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+os.makedirs(LOGS_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOGS_DIR, "auto_mosaic.log")
 logging.basicConfig(
     filename=LOG_FILE,
     level=logging.INFO,
