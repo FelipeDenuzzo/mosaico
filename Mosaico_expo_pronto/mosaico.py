@@ -640,11 +640,22 @@ def _renderizar_faixa(
             ultimas_posicoes[pixel_sel.path] = (linha, coluna)
             cor_anterior = cor_celula
 
-            if recent_tracker is not None:
-                if pixel_sel.created_at and pixel_sel.created_at > recent_tracker.get("created_at", ""):
+            if recent_tracker is not None and pixel_sel.created_at:
+                centro_c = colunas / 2.0
+                centro_r = linhas_totais / 2.0
+                dist_c_sq = (coluna - centro_c) ** 2 + (linha - centro_r) ** 2
+                atual_max_data = recent_tracker.get("created_at", "")
+
+                if pixel_sel.created_at > atual_max_data:
                     recent_tracker["created_at"] = pixel_sel.created_at
                     recent_tracker["col"] = coluna
                     recent_tracker["row"] = linha
+                    recent_tracker["dist_centro_sq"] = dist_c_sq
+                elif pixel_sel.created_at == atual_max_data:
+                    if dist_c_sq < recent_tracker.get("dist_centro_sq", float("inf")):
+                        recent_tracker["col"] = coluna
+                        recent_tracker["row"] = linha
+                        recent_tracker["dist_centro_sq"] = dist_c_sq
 
             x_final = coluna * tamanho_final_pixel
             y_faixa = (linha - linha_inicio) * tamanho_final_pixel
@@ -920,7 +931,7 @@ def criar_mosaico(
 
     ultimas_posicoes: Dict[str, Tuple[int, int]] = {}
     cache_candidatos_por_cor: Dict[Tuple[int, int, int], List[TileInfo]] = {}
-    recent_tracker: Dict[str, Any] = {"created_at": "", "col": -1, "row": -1}
+    recent_tracker: Dict[str, Any] = {"created_at": "", "col": -1, "row": -1, "dist_centro_sq": float("inf")}
 
     terminal_log("Carregamento do acervo iniciado.", arquivo=nome_arquivo_base)
     t_carregamento_acervo = time.perf_counter()
@@ -1098,6 +1109,9 @@ def criar_mosaico(
         try:
             x_pct = ((recent_tracker["col"] + 0.5) / colunas) * 100
             y_pct = ((recent_tracker["row"] + 0.5) / linhas) * 100
+            # Limita a coordenadas seguras longe das bordas externas (15% a 85%) para enquadramento perfeito
+            x_pct = max(15.0, min(85.0, x_pct))
+            y_pct = max(15.0, min(85.0, y_pct))
             json_path = str(caminho_saida) + ".json"
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump({"recent_x": x_pct, "recent_y": y_pct}, f)

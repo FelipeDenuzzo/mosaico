@@ -444,14 +444,14 @@ def indexar_tile_usuario(
         h2_r, h2_g, h2_b = _calcular_rgb_medio(h2)
         h3_r, h3_g, h3_b = _calcular_rgb_medio(h3)
 
-        agora_iso = datetime.now().isoformat(timespec="seconds")
+        from datetime import timezone
+        agora_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
         with sqlite3.connect(INDEX_DB_PATH) as conn:
             existente = conn.execute(
                 "SELECT id FROM tiles WHERE path = ?", (caminho_tile,)
             ).fetchone()
             if not existente:
-                agora_iso = datetime.now().isoformat(timespec="seconds")
                 conn.execute(
                     """
                     INSERT INTO tiles (
@@ -703,6 +703,17 @@ def process_image(src_path: str) -> None:
         _write_json(meta_path, meta)
         logging.info(f"[{job_id}] Início do processamento.")
 
+        # Indexa o tile da foto capturada no acervo ANTES de criar o mosaico,
+        # para que o mini-retrato do usuário já participe do seu próprio mosaico
+        try:
+            t_idx_tile = time.perf_counter()
+            indexar_tile_usuario(archive_input_path, nome_rastreado, job_id)
+            tempo_idx_tile = time.perf_counter() - t_idx_tile
+            _add_job_timing(job_id, "indexacao_tile_usuario_s", tempo_idx_tile)
+            logging.info(f"[{job_id}] Tile do usuario indexado com sucesso antes do mosaico.")
+        except Exception as e:
+            logging.warning(f"[{job_id}] Aviso ao antecipar indexacao de tile do usuario: {e}")
+
         # Converte a entrada (HEIC/JPEG/PNG/WEBP/AVIF) para AVIF antes do mosaico
         processing_input_avif = _converter_entrada_para_avif(processing_input_path)
         if processing_input_avif != processing_input_path:
@@ -764,8 +775,6 @@ def process_image(src_path: str) -> None:
                     flush_timings=True,
                 )
                 logging.info(f"[{job_id}] Entrega concluída: {output_name}")
-
-                indexar_tile_usuario(archive_input_path, nome_rastreado, job_id)
                 
                 # Integrar mosaico com indexador: desativado por causar lentidão extrema ao decodificar AVIF gigante
                 # integrar_mosaico_com_indexador(internal_output_path, job_id)

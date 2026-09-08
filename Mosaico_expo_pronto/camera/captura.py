@@ -2,12 +2,27 @@ import os
 import time
 import json
 from datetime import datetime
+import threading
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import cv2
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INPUT_DIR = os.path.join(BASE_DIR, "input")
 CONFIG_PATH = os.path.join(BASE_DIR, "camera_config.json")
 LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_log.txt")
+
+STREAM_PORT = 8082
+IDLE_TIMEOUT_DEFAULT = 600  # 10 minutos em segundos
+
+# Estado compartilhado para streaming e status
+_FRAME_LOCK = threading.Lock()
+_LATEST_JPEG = None
+_NEW_FRAME_EVENT = threading.Event()
+_LAST_MOTION_TIME = time.time()
+_IS_CAMERA_UNLOCKED = True
+_CAMERA_ACTIVE = False
+_ACTIVE_STREAM_CLIENTS = 0
+_CLIENTS_LOCK = threading.Lock()
 
 def log(msg: str):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -64,6 +79,83 @@ def is_camera_unlocked() -> bool:
 
     return True
 
+class CameraStreamHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        # Desativa logs repetitivos no terminal para cada requisição HTTP/frame
+        pass
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+
+    def do_GET(self):
+        global _ACTIVE_STREAM_CLIENTS
+
+        if self.path.startswith('/video_feed'):
+            self.send_response(200)
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=frame')
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            self.send_header('Pragma', 'no-cache')
+            self.send_header('Expires', '0')
+            self.end_headers()
+
+            with _CLIENTS_LOCK:
+                _ACTIVE_STREAM_CLIENTS += 1
+
+            try:
+                while _CAMERA_ACTIVE:
+                    _NEW_FRAME_EVENT.wait(timeout=0.5)
+                    with _FRAME_LOCK:
+                        frame_bytes = _LATEST_JPEG
+
+                    if frame_bytes is not None:
+                        self.wfile.write(b'--frame\r\n')
+                        self.wfile.write(b'Content-Type: image/jpeg\r\n')
+                        self.wfile.write(f'Content-Length: {len(frame_bytes)}\r\n\r\n'.encode('ascii'))
+                        self.wfile.write(frame_bytes)
+                        self.wfile.write(b'\r\n')
+                    time.sleep(0.01)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            finally:
+                with _CLIENTS_LOCK:
+                    _ACTIVE_STREAM_CLIENTS = max(0, _ACTIVE_STREAM_CLIENTS - 1)
+
+        elif self.path.startswith('/status'):
+            self.send_response(200)
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Cache-Control', 'no-cache')
+            self.end_headers()
+
+            now = time.time()
+            idle_seconds = max(0.0, now - _LAST_MOTION_TIME)
+            is_idle = idle_seconds >= IDLE_TIMEOUT_DEFAULT
+
+            payload = {
+                "active": _CAMERA_ACTIVE,
+                "unlocked": _IS_CAMERA_UNLOCKED,
+                "isIdle": is_idle,
+                "idleSeconds": round(idle_seconds, 1),
+                "idleTimeoutSeconds": IDLE_TIMEOUT_DEFAULT
+            }
+            self.wfile.write(json.dumps(payload).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+def start_stream_server(port=STREAM_PORT):
+    try:
+        server = ThreadingHTTPServer(('0.0.0.0', port), CameraStreamHandler)
+        log(f"Servidor de streaming da camera ativo em http://127.0.0.1:{port}/video_feed")
+        server.serve_forever()
+    except Exception as e:
+        log(f"Erro ao iniciar servidor de streaming: {e}")
+
 def open_best_camera(preferred_index=0):
     candidates = [preferred_index]
     for i in [0, 1, 2, 3]:
@@ -109,8 +201,13 @@ def open_best_camera(preferred_index=0):
     return None, None
 
 def main():
+    global _CAMERA_ACTIVE, _LATEST_JPEG, _LAST_MOTION_TIME, _IS_CAMERA_UNLOCKED
     os.makedirs(INPUT_DIR, exist_ok=True)
     log("Iniciando modulo de captura da camera...")
+
+    # Inicia servidor HTTP de streaming em background
+    http_thread = threading.Thread(target=start_stream_server, args=(STREAM_PORT,), daemon=True)
+    http_thread.start()
 
     # Carrega configuracoes (padrao: 1 para webcam USB externa)
     preferred_index = 1
@@ -132,6 +229,7 @@ def main():
         if not cap:
             log("Falha critica: Nenhuma webcam disponivel. O script continuara tentando a cada 10s...")
 
+    _CAMERA_ACTIVE = (cap is not None and cap.isOpened())
     prev_gray = None
     motion_threshold = 0.015  # 1.5% de pixels alterados
     start_time = time.time()
@@ -145,13 +243,16 @@ def main():
 
             # Se camera nao estiver aberta, tenta reconectar
             if not cap or not cap.isOpened():
+                _CAMERA_ACTIVE = False
                 if now - last_heartbeat_time > 10.0:
                     log("Aguardando conexao com a camera...")
                     last_heartbeat_time = now
                     cap, camera_index = open_best_camera(preferred_index)
+                    _CAMERA_ACTIVE = (cap is not None and cap.isOpened())
                 time.sleep(1.0)
                 continue
 
+            _CAMERA_ACTIVE = True
             ret, frame = cap.read()
             if not ret or frame is None:
                 consecutive_read_failures += 1
@@ -165,20 +266,29 @@ def main():
 
             consecutive_read_failures = 0
             unlocked = is_camera_unlocked()
+            _IS_CAMERA_UNLOCKED = unlocked
 
-            # Heartbeat informativo a cada 15 segundos
-            if now - last_heartbeat_time > 15.0:
-                status_str = "LIVRE para disparo" if unlocked else "BLOQUEADA (mural/fila ocupada)"
-                log(f"Camera ativa [indice {camera_index}]. Status: {status_str}.")
-                last_heartbeat_time = now
+            # Atualizar frame codificado para o stream MJPEG
+            # (otimização: gera JPEG leve de ~85% qualidade)
+            try:
+                # Reduz resolução para streaming apenas se for gigante (>1280px) para máxima fluidez
+                h, w = frame.shape[:2]
+                if w > 1280:
+                    scale = 1280.0 / w
+                    preview_frame = cv2.resize(frame, (1280, int(h * scale)), interpolation=cv2.INTER_AREA)
+                else:
+                    preview_frame = frame
 
-            # Se a tela ou back-end estiverem ocupados, bloqueia novas fotos
-            if not unlocked:
-                prev_gray = None
-                time.sleep(0.2)
-                continue
+                ret_enc, jpeg_data = cv2.imencode('.jpg', preview_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+                if ret_enc:
+                    with _FRAME_LOCK:
+                        _LATEST_JPEG = jpeg_data.tobytes()
+                    _NEW_FRAME_EVENT.set()
+                    _NEW_FRAME_EVENT.clear()
+            except Exception:
+                pass
 
-            # Converter para tons de cinza e aplicar desfoque Gaussiano
+            # Converter para tons de cinza e aplicar desfoque Gaussiano para detecção de movimento
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
@@ -198,6 +308,23 @@ def main():
 
             prev_gray = gray
             motion_detected = motion_ratio > motion_threshold
+
+            # Se houve movimento, atualiza o timestamp de atividade (reseta ociosidade)
+            if motion_detected:
+                _LAST_MOTION_TIME = now
+
+            # Heartbeat informativo a cada 15 segundos
+            if now - last_heartbeat_time > 15.0:
+                idle_sec = now - _LAST_MOTION_TIME
+                status_str = "LIVRE para disparo" if unlocked else "BLOQUEADA (mural/fila ocupada)"
+                log(f"Camera ativa [indice {camera_index}]. Status: {status_str}. Inatividade: {idle_sec:.1f}s.")
+                last_heartbeat_time = now
+
+            # Se a tela ou back-end estiverem ocupados, bloqueia novas fotos
+            if not unlocked:
+                prev_gray = None
+                time.sleep(0.2)
+                continue
 
             # Gatilho de tempo (intervalSeconds como fallback para teste/exposicao)
             time_since_photo = now - last_photo_time
@@ -224,16 +351,18 @@ def main():
                 log(f"Foto salva com sucesso em: {filepath}")
 
                 last_photo_time = time.time()
+                _LAST_MOTION_TIME = time.time()
                 prev_gray = None
 
                 # Aguarda o watcher iniciar o processamento antes de checar a trava de novo
                 time.sleep(1.5)
 
-            time.sleep(0.1)
+            time.sleep(0.04)  # ~25 FPS loop
 
     except KeyboardInterrupt:
         log("Encerrando script de captura...")
     finally:
+        _CAMERA_ACTIVE = False
         if cap:
             cap.release()
         log("Webcam liberada com sucesso.")

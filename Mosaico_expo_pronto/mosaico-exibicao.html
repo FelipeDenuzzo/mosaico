@@ -130,12 +130,114 @@
       opacity: 0;
       transition: opacity 2.5s cubic-bezier(0.1, 0.8, 0.3, 1);
     }
+
+    /* Ocultação do cursor do mouse após inatividade */
+    body.hide-cursor, body.hide-cursor * {
+      cursor: none !important;
+    }
+
+    /* Visualização ao Vivo da Webcam (Modo Preparo) */
+    #camera-preview-container {
+      position: absolute;
+      top: 2.5vh;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(92vw, 840px);
+      height: 55vh;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1), transform 1.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 1.2s;
+      pointer-events: none;
+    }
+    #camera-preview-container.camera-hidden {
+      opacity: 0;
+      visibility: hidden;
+      transform: translateX(-50%) scale(0.95);
+    }
+    #camera-preview-box {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #0d0d0d;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85), 0 0 0 2px rgba(255, 255, 255, 0.18);
+    }
+    #camera-stream {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Efeito espelho */
+      display: block;
+    }
+    .camera-badge {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #ff3b30;
+      border-radius: 50%;
+      box-shadow: 0 0 8px #ff3b30;
+      animation: pulse-dot 1.5s infinite;
+    }
+    @keyframes pulse-dot {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .camera-instruction {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(8px);
+      color: #f0f0f0;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 20px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
   </style>
 </head>
 <body>
 <div id="stage-wrapper">
   <div id="camera-flash"></div>
   <div id="status">Carregando galeria...</div>
+
+  <!-- Container de visualização da Webcam ao Vivo -->
+  <div id="camera-preview-container">
+    <div id="camera-preview-box">
+      <img id="camera-stream" src="http://127.0.0.1:8082/video_feed" alt="Câmera ao vivo" />
+      <div class="camera-badge">
+        <span class="live-dot"></span> AO VIVO
+      </div>
+      <div class="camera-instruction">Prepare-se para a foto!</div>
+    </div>
+  </div>
 
   <!-- Barra de Carregamento -->
   <div id="loading-bar-container">
@@ -460,12 +562,81 @@
     document.getElementById('apply-btn').onclick = aplicarControles;
     document.getElementById('restart-btn').onclick = () => { aplicarControles(); restart(); };
 
+    // Ocultar cursor após 5 segundos sem movimento
+    initCursorAutoHide();
+
     // Monitoramento dos jobs para a barra de carregamento
     monitorJobs();
     setInterval(monitorJobs, 1500);
 
+    // Monitoramento de status da câmera (ociosidade / movimento)
+    checkCameraStatus();
+    setInterval(checkCameraStatus, 2000);
+
     startLoop();
   });
+
+  // ── Controle do Cursor ───────────────────────────────
+  let cursorTimeout = null;
+  function resetCursorTimer() {
+    document.body.classList.remove('hide-cursor');
+    if (cursorTimeout) clearTimeout(cursorTimeout);
+    cursorTimeout = setTimeout(() => {
+      document.body.classList.add('hide-cursor');
+    }, 5000);
+  }
+
+  function initCursorAutoHide() {
+    window.addEventListener('mousemove', resetCursorTimer, { passive: true });
+    window.addEventListener('mousedown', resetCursorTimer, { passive: true });
+    window.addEventListener('touchstart', resetCursorTimer, { passive: true });
+    resetCursorTimer();
+  }
+
+  // ── Controle da Câmera ao Vivo e Layout ───────────────
+  let isCameraPreviewVisible = true;
+  let isCameraIdle = false;
+  let currentWallMode = 'bottom'; // 'bottom' = modo preparo com webcam, 'center' = modo apresentação completa
+
+  function setCameraPreviewVisible(visible) {
+    const container = document.getElementById('camera-preview-container');
+    if (!container) return;
+    isCameraPreviewVisible = visible;
+    if (visible && !isCameraIdle) {
+      container.classList.remove('camera-hidden');
+    } else {
+      container.classList.add('camera-hidden');
+    }
+  }
+
+  async function checkCameraStatus() {
+    try {
+      const res = await fetch('http://127.0.0.1:8082/status');
+      if (res.ok) {
+        const data = await res.json();
+        const previousIdle = isCameraIdle;
+        isCameraIdle = !!data.isIdle;
+
+        if (isCameraIdle !== previousIdle) {
+          if (isCameraIdle) {
+            console.log('[Exibição] Inatividade > 10 min. Câmera apagada em fadeout. Modo apresentação total.');
+            setCameraPreviewVisible(false);
+            if (wallSprites.length && !heroSprite) {
+              await mostrarParede('center');
+            }
+          } else {
+            console.log('[Exibição] Movimento detectado! Reativando modo de preparo.');
+            if (wallSprites.length && !heroSprite) {
+              await mostrarParede('bottom');
+            }
+            setCameraPreviewVisible(true);
+          }
+        }
+      }
+    } catch (e) {
+      // Servidor de streaming da câmera inicializando ou offline
+    }
+  }
 
   function triggerFlash() {
     const flash = document.getElementById('camera-flash');
@@ -578,7 +749,9 @@
           isInitialLoad = false;
         }
 
-        await mostrarParede();
+        const initialMode = isCameraIdle ? 'center' : 'bottom';
+        await mostrarParede(initialMode);
+        setCameraPreviewVisible(!isCameraIdle);
         
         // Buscar candidatos para zoom: novos mosaicos ainda não mostrados nesta sessão
         const candidates = manifest.filter(m => !preExistingFiles.has(m.file) && !zoomedFiles.has(m.file));
@@ -593,20 +766,26 @@
           const targetIndex = manifest.findIndex(m => m.file === targetItem.file);
           if (targetIndex !== -1) {
             try {
+              setCameraPreviewVisible(false); // Oculta a câmera para a apresentação de herói
               await setExhibitionStatus(true);
               await animarHero(targetIndex);
             } finally {
               zoomedFiles.add(targetItem.file);
               await setExhibitionStatus(false);
               lastActivityTimestamp = Date.now(); // atualiza após terminar a exibição
+              // Retorna suavemente ao modo de preparo para o próximo visitante
+              await mostrarParede('bottom');
+              if (!isCameraIdle) {
+                setCameraPreviewVisible(true);
+              }
             }
           }
         } else {
-          // Nenhum mosaico novo. Checar se atingiu o tempo de inatividade (padrão 30 min)
-          const idleThresholdMs = Math.max(1, (settings.idleTimeoutMin || 30)) * 60 * 1000;
+          // Nenhum mosaico novo. Checar se atingiu o tempo de inatividade
+          const idleThresholdMs = Math.max(1, (settings.idleTimeoutMin || 10)) * 60 * 1000;
           const tempoInativo = Date.now() - lastActivityTimestamp;
 
-          if (tempoInativo >= idleThresholdMs && manifest.length > 0) {
+          if ((isCameraIdle || tempoInativo >= idleThresholdMs) && manifest.length > 0) {
             // MODO GALERIA POR INATIVIDADE:
             // Percorrer do mais antigo (último do array ordenado decrescente) para o mais recente (índice 0)
             if (idleGalleryCurrentIndex === null || idleGalleryCurrentIndex < 0 || idleGalleryCurrentIndex >= manifest.length) {
@@ -615,16 +794,20 @@
 
             const targetIndex = idleGalleryCurrentIndex;
             const targetItem = manifest[targetIndex];
-            console.log(`[Modo Galeria] Inatividade detectada (${Math.round(tempoInativo/1000/60)} min). Exibindo mosaico mais antigo [${targetIndex + 1}/${manifest.length}]: ${targetItem.file}`);
+            console.log(`[Modo Galeria] Inatividade detectada. Exibindo mosaico antigo [${targetIndex + 1}/${manifest.length}]: ${targetItem.file}`);
 
             try {
               // 1. Bloqueia câmera durante a animação de zoom do mosaico antigo
+              setCameraPreviewVisible(false);
               await setExhibitionStatus(true);
               await animarHero(targetIndex);
             } finally {
               // 2. Garante que volta ao mural e libera a câmera para o visitante
               await setExhibitionStatus(false);
-              await mostrarParede();
+              await mostrarParede(isCameraIdle ? 'center' : 'bottom');
+              if (!isCameraIdle) {
+                setCameraPreviewVisible(true);
+              }
               
               // Prepara o próximo para a rodada seguinte (avança em direção ao mais recente)
               idleGalleryCurrentIndex--;
@@ -642,10 +825,12 @@
             // Aguarda os 10s em pequenos passos checando se entrou algum novo job
             const waitEnd = Date.now() + (idleWaitSec * 1000);
             while (Date.now() < waitEnd && !interrupted) {
-              if (activeJobId) {
+              if (activeJobId || !isCameraIdle) {
                 // Visitante detectado! Sai do modo galeria imediatamente
                 lastActivityTimestamp = Date.now();
                 idleGalleryCurrentIndex = null;
+                await mostrarParede('bottom');
+                setCameraPreviewVisible(true);
                 break;
               }
               await wait(300);
@@ -709,18 +894,30 @@
     }
   }
 
-  async function mostrarParede() {
+  async function mostrarParede(modo = currentWallMode) {
+    currentWallMode = modo;
     wallLayer.removeChildren(); heroLayer.removeChildren(); wallSprites = [];
     liberarTexturasAntigas(manifest);
     const cols = Math.max(1, Math.floor(settings.wallColumns));
     const gap = Math.max(0, settings.wallGap) / 100;
     const W = wrapper.clientWidth, H = wrapper.clientHeight;
     
-    // Região central retangular com proporção 3:4 (limite de altura H e largura H * 0.75)
-    const wallW = Math.min(H * 0.75, W);
-    const wallH = wallW * (4/3);
-    const wallX = (W - wallW) / 2;
-    const wallY = (H - wallH) / 2;
+    let wallW, wallH, wallX, wallY;
+
+    if (modo === 'bottom') {
+      // Modo Preparo: Câmera no topo (~55vh), 5 mosaicos distribuídos horizontalmente na base (~35vh)
+      wallH = Math.min(H * 0.35, 300);
+      const singleTileW = wallH * 0.75;
+      wallW = Math.min(W * 0.95, (singleTileW / Math.max(0.1, 1 - gap)) * cols);
+      wallX = (W - wallW) / 2;
+      wallY = H - wallH - (H * 0.035);
+    } else {
+      // Modo Apresentação / Ocioso: Tela cheia centralizada
+      wallW = Math.min(H * 0.75, W);
+      wallH = wallW * (4/3);
+      wallX = (W - wallW) / 2;
+      wallY = (H - wallH) / 2;
+    }
 
     const n = manifest.length, rows = Math.ceil(n / cols);
     const tileW = wallW / cols * (1-gap), tileH = wallH / rows * (1-gap);
@@ -731,7 +928,7 @@
       const texture = await getTexture(item.file);
       const sprite = new PIXI.Sprite(texture);
       
-      // Coordenadas relativas à caixa central da parede
+      // Coordenadas relativas à caixa da parede
       const cellX = wallX + tx * wallW/cols + gap*wallW/(2*cols);
       const cellY = wallY + ty * wallH/rows + gap*wallH/(2*rows);
       const iw = texture.width, ih = texture.height;
@@ -747,6 +944,7 @@
 
   async function animarHero(idx) {
     if (!wallSprites[idx]) return;
+    setCameraPreviewVisible(false); // oculta a webcam durante a animação do herói
     const wallSprite = wallSprites[idx];
     const item = manifest[idx];
     const orig = { x: wallSprite.x, y: wallSprite.y, w: wallSprite.width, h: wallSprite.height };
@@ -777,6 +975,9 @@
       if (interrupted) return;
       heroLayer.removeChildren(); wallSprite.visible = true;
       updateProductionStatus();
+      if (!isCameraIdle) {
+        setCameraPreviewVisible(true);
+      }
       return;
     }
 
@@ -795,6 +996,9 @@
     if (interrupted) return;
     heroLayer.removeChildren(); wallSprite.visible = true;
     updateProductionStatus();
+    if (!isCameraIdle) {
+      setCameraPreviewVisible(true);
+    }
   }
 
   function animar({ from, to, ms }) {
@@ -862,7 +1066,7 @@
   }
 
   window.addEventListener('resize', () => {
-    if (wallSprites.length) mostrarParede();
+    if (wallSprites.length) mostrarParede(currentWallMode);
     if (heroSprite) {
       const fit = getFullFit(heroSprite);
       heroSprite.x=fit.x; heroSprite.y=fit.y; heroSprite.width=fit.w; heroSprite.height=fit.h;
